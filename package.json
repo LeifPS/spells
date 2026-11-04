@@ -1,1 +1,14 @@
-{"type":"module"}
+{
+  "name": "spells",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node tests/recognizer.test.mjs && node tests/game.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

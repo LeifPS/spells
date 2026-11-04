@@ -98,7 +98,12 @@ function score(cand, tpl) {
 export function shapeScore(cand, shapeKey) {
   let best = 0;
   for (const v of variants(shapeKey)) best = Math.max(best, score(cand, v));
-  return best;
+  // Geschlossene Formen (Kreis, Herz, …): Strich muss sich ungefähr schließen
+  if (SHAPES[shapeKey].closed) {
+    const gap = dist(cand[0], cand[N - 1]);
+    best -= Math.max(0, gap - 0.35) * 0.6;
+  }
+  return Math.max(0, best);
 }
 
 /**
@@ -117,6 +122,9 @@ export function recognize(rawPts, owned) {
   const sp = SPELL_BY_ID[top.id];
   const thr = RARITIES[sp.rarity].thr;
   if (top.score < thr) return { ok: false, reason: 'low', best: top, all };
+  // Zu knapp zwischen zwei gültigen Zaubern? Lieber "unklar" als ein falscher Zauber.
+  const sec = all[1], sp2 = SPELL_BY_ID[sec.id];
+  if (sec.score >= RARITIES[sp2.rarity].thr && top.score - sec.score < 0.03) return { ok: false, reason: 'ambiguous', best: top, all };
   if (!owned.includes(top.id)) return { ok: false, reason: 'locked', locked: top.id, best: top, all };
   return { ok: true, id: top.id, score: top.score, best: top, all };
 }
