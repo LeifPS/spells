@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node tests/recog.test.mjs && node tests/sim.test.mjs"
+    "test": "node tests/recog.test.mjs && node tests/sim.test.mjs && node tests/store.test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4"

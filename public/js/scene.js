@@ -42,7 +42,7 @@ function pine(g, x, y, h, color) {
   g.fillRect(x - h * 0.03, y - h * 0.2, h * 0.06, h * 0.2);
 }
 
-function renderBackground(name, w, h, dpr) {
+export function renderBackground(name, w, h, dpr) {
   const T = THEMES[name], cv = document.createElement('canvas');
   cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
   const g = cv.getContext('2d');

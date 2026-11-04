@@ -26,6 +26,7 @@ export class Battle {
     <div class="b-mid"><div class="b-timer">2:30</div><div class="b-sd">SUDDEN DEATH</div></div>
     <div class="b-side foe"><div class="b-info"><div class="b-name"></div><div class="b-hp"><i class="g"></i><i class="f"></i><i class="sh"></i><b></b></div><div class="b-mn"><i></i></div><div class="b-st"></div></div><canvas class="b-av" width="56" height="56"></canvas></div>
   </div>
+  <div class="b-coach" hidden></div>
   <div class="b-callout"></div>
   <div class="b-hurt"></div>
   <div class="b-tools"><button class="b-btn b-emo" aria-label="Emotes">😊</button><button class="b-btn b-quit" aria-label="Aufgeben">🏳</button></div>
@@ -42,7 +43,7 @@ export class Battle {
     const q = (s) => root.querySelector(s);
     this.el = {
       scene: q('.b-scene'), pad: q('.b-pad'), deck: q('.b-deck'), timer: q('.b-timer'), sd: q('.b-sd'), callout: q('.b-callout'), hurt: q('.b-hurt'),
-      me: q('.b-side.me'), foe: q('.b-side.foe'), mbar: q('.b-mbar'), emotes: q('.b-emotes'), queue: q('.b-queue'), count: q('.b-count'), result: q('.b-result'), hint: q('.b-hint'),
+      me: q('.b-side.me'), foe: q('.b-side.foe'), mbar: q('.b-mbar'), emotes: q('.b-emotes'), queue: q('.b-queue'), count: q('.b-count'), result: q('.b-result'), hint: q('.b-hint'), coachEl: q('.b-coach'),
     };
     this.scene = new Scene(this.el.scene);
     this.fx = new FX(this.scene);
@@ -70,8 +71,8 @@ export class Battle {
   hide() { this.root.hidden = true; if (this.raf) cancelAnimationFrame(this.raf); this.raf = null; }
 
   /** mode: 'online' | 'train' ; profile: {pid,name,trophies,deck,levels,skin} */
-  play(profile, { mode = 'online', level = 1, theme = null, noBot = false } = {}) {
-    this.profile = profile; this.mode = mode; this.level = level; this.opts = { mode, level, theme, noBot };
+  play(profile, { mode = 'online', level = 1, theme = null, noBot = false, ghost = null } = {}) {
+    this.profile = profile; this.mode = mode; this.level = level; this.opts = { mode, level, theme, noBot, ghost };
     if (this.src) this.src.close();
     this.show();
     this.resetUi();
@@ -82,7 +83,7 @@ export class Battle {
       this.src = new NetSource(profile);
     } else {
       this.phase = 'wait';
-      this.src = new LocalSource(profile, { level, theme, noBot, countdown: mode === 'tutorial' ? 2 : 3.2 });
+      this.src = new LocalSource(profile, { level, theme, noBot, countdown: mode === 'tutorial' || mode === 'practice' ? 2 : 3.2 });
     }
     this.src.on((m) => this.msg(m));
     this.src.start();
@@ -94,7 +95,7 @@ export class Battle {
     for (const k of ['queue', 'count', 'result', 'emotes']) this.el[k].hidden = true;
     this.el.hint.classList.remove('hide');
     this.el.timer.textContent = fmtTime(CFG.duration); this.el.sd.classList.remove('on'); this.el.timer.classList.remove('danger');
-    this.el.callout.innerHTML = ''; this.ghostId = null; this.opt = {}; this.matchT = 0; this.snapAt = 0; this.over = false;
+    this.el.callout.innerHTML = ''; this.ghostId = null; this.opt = {}; this.matchT = 0; this.snapAt = 0; this.over = false; this.castLog = []; this.coach(null);
     this.root.querySelector('.b-quit').classList.remove('arm');
   }
 
@@ -162,6 +163,8 @@ export class Battle {
     this.el.count.hidden = false;
     this.pad.enabled = false; this.pad.setGhost(null); this.ghostId = null;
     this.opt = {};
+    if (this.opts.ghost) this.toggleGhost(this.opts.ghost);
+    if (this.hooks.onStart) this.hooks.onStart(m, this);
     music.start('menu');
   }
 
@@ -196,11 +199,12 @@ export class Battle {
 
   onEvent(e) {
     const fx = this.fx, sc = this.scene, me = this.you;
+    if (this.hooks.onEvent) { try { this.hooks.onEvent(e, this); } catch (err) { console.error(err); } }
     switch (e.k) {
       case 'cast': {
         fx.cast(e);
         const sp = SPELL_BY_ID[e.id];
-        if (e.p === me) { delete this.opt.pending; }
+        if (e.p === me) { delete this.opt.pending; this.castLog.push({ id: e.id, acc: e.acc }); }
         else this.callout(sp, e);
         break;
       }
@@ -275,12 +279,25 @@ export class Battle {
     return { ok: true, color: sp.color, msg: sp.name };
   }
 
+  toggleGhostTo(id) {
+    this.ghostId = id || null;
+    const sp = id && SPELL_BY_ID[id];
+    this.pad.setGhost(sp ? sp.shape : null, sp ? sp.color : null);
+    this.el.deck.querySelectorAll('.slot').forEach((b) => b.classList.toggle('sel', b.dataset.id === this.ghostId));
+  }
   toggleGhost(id) {
     sfx.click();
     this.ghostId = this.ghostId === id ? null : id;
     const sp = this.ghostId && SPELL_BY_ID[this.ghostId];
     this.pad.setGhost(sp ? sp.shape : null, sp ? sp.color : null);
     this.el.deck.querySelectorAll('.slot').forEach((b) => b.classList.toggle('sel', b.dataset.id === this.ghostId));
+  }
+
+  coach(html, { skip } = {}) {
+    const c = this.el.coachEl;
+    if (!html) { c.hidden = true; c.innerHTML = ''; return; }
+    c.hidden = false; c.innerHTML = `<div>${html}</div>`;
+    if (skip) { const b = document.createElement('button'); b.textContent = 'Überspringen'; b.onclick = skip; c.appendChild(b); }
   }
 
   // ------------------------------------------------------------ Deck-Leiste
@@ -390,7 +407,7 @@ export class Battle {
     if (!draw) { this.scene.trigger(1 - m.winner, 'die'); this.scene.trigger(m.winner, 'win'); }
     this.scene.slowmo(0.35, 0.8); this.scene.shake(14);
     const stats = m.stats || [];
-    const res = { won: win && !draw, draw, lost: !win && !draw, reason: m.reason, time: m.time, you: this.you, mode: this.mode, stats: stats[this.you] || null, foeStats: stats[1 - this.you] || null, opponent: this.players ? this.players[1 - this.you] : null, level: this.level };
+    const res = { won: win && !draw, draw, lost: !win && !draw, reason: m.reason, time: m.time, you: this.you, mode: this.mode, stats: stats[this.you] || null, foeStats: stats[1 - this.you] || null, opponent: this.players ? this.players[1 - this.you] : null, level: this.level, casts: this.castLog };
     music.stop();
     setTimeout(() => this.showResult(res), 1500);
   }

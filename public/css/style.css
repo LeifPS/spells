@@ -124,3 +124,13 @@ canvas{display:block}
 
 #toast{position:fixed;left:50%;top:calc(14px + var(--sat));transform:translate(-50%,-80px);background:#1b1550;border:1px solid #fff3;border-radius:16px;padding:9px 16px;font-weight:600;font-size:14px;z-index:99;transition:transform .3s;max-width:90vw;text-align:center}
 #toast.on{transform:translate(-50%,0)}
+.b-coach{position:absolute;left:10px;right:10px;top:calc(76px + var(--sat));z-index:3;padding:10px 12px;border-radius:14px;background:linear-gradient(#2a2480ee,#17104eee);border:1px solid #9fb4ff77;font-size:14px;line-height:1.35;box-shadow:0 6px 20px #0008;animation:coin .3s ease-out}
+.b-coach b{color:var(--gold)}
+.b-coach button{display:block;margin:6px 0 0 auto;font-size:12px;color:var(--mut);text-decoration:underline}
+.b-extra{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.rw{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.rw span{background:#ffffff12;border:1px solid #fff2;border-radius:12px;padding:5px 10px;font-weight:700;font-size:14px}
+.rw .up{background:#2c6f3b66;border-color:#6fd08a}
+.rw .down{background:#7a2a3a66;border-color:#ff8a9a}
+.rw .gold{background:#6a4a0a66;border-color:var(--gold);color:var(--gold)}
+.lvlup{background:linear-gradient(90deg,#ffb52e33,#ff4a7d33);border:1px solid var(--gold);border-radius:14px;padding:8px;font-weight:800;animation:pulse .7s infinite alternate}
