@@ -186,7 +186,7 @@ export class Match {
       const maxRar = Math.max(...h0.deck.map((id) => RARITY_ORDER.indexOf(SPELL_BY_ID[id].rarity)));
       const lvl = h0.trophies < 300 ? 1 : h0.trophies < 900 ? 2 : 3;
       const deck = botDeck(maxRar, lvl);
-      list.push({ bot: true, ws: null, joined: true, name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], deck, levels: botLevels(deck, lvl), trophies: Math.max(0, h0.trophies + Math.round((Math.random() - 0.5) * 120)), skin: BOT_SKINS[Math.floor(Math.random() * BOT_SKINS.length)], botLevel: lvl });
+      list.push({ bot: true, ws: null, joined: true, name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], deck, levels: botLevels(deck, lvl), trophies: Math.max(0, h0.trophies + Math.round((Math.random() - 0.5) * 120)), skin: (() => { const c = BOT_SKINS.filter((k) => k.robe !== h0.skin.robe); return c[Math.floor(Math.random() * c.length)]; })(), botLevel: lvl });
     }
     if (Math.random() < 0.5) list.reverse();
     this.players = list;
