@@ -1,17 +1,21 @@
-// Cloudflare Worker: statische Dateien (public/) + Matchmaking (Lobby) + Kampfräume (Match).
-import { SPELLS, RARITY_ORDER, SPELL_BY_ID, RARITIES } from '../public/spells.js';
-import { newPlayer, snapshot, resolveRound, outcome, validatePlay, MAX_HP } from './game.js';
+// Cloudflare Worker: statische Dateien (public/) + Matchmaking (Lobby-DO) + Echtzeit-Kampf (Match-DO).
+import { Duel } from '../public/js/sim.js';
+import { SPELL_BY_ID, RARITY_ORDER, MAX_LEVEL } from '../public/js/spells.js';
+import { makeBot, botStep, botDeck, botLevels } from '../public/js/bot.js';
 
-const DRAW_MS = 10000; // Zeichenzeit pro Runde
-const GRACE_MS = 600; // Puffer für Netzwerk-Latenz, damit niemand wegen Ping benachteiligt wird
-const RESOLVE_MS = 4200; // Anzeigedauer der Auflösung
-const BOT_WAIT_MS = 8000; // so lange wird auf einen echten Gegner gewartet
-const BOT_NAMES = ['Irrlicht', 'Funkenfee', 'Nebelhexe', 'Mondmagier', 'Kristallgeist', 'Aschenzwerg'];
+const STEP = 0.05; // Simulationsschritt (s)
+const COUNTDOWN_MS = 3200;
+const BOT_WAIT_S = 9; // so lange wird nach einem Menschen gesucht
+const THEMES = ['wald', 'vulkan', 'eis', 'tempel'];
+const BOT_NAMES = ['Irrlicht', 'Funkenfee', 'Nebelhexe', 'Mondmagier', 'Kristallgeist', 'Aschenzwerg', 'Sternenwirt', 'Donnerkater'];
+const BOT_SKINS = [
+  { robe: '#c0392b', trim: '#ffd86b', hat: 0 }, { robe: '#16a085', trim: '#f1f5a8', hat: 1 },
+  { robe: '#8e44ad', trim: '#ffd86b', hat: 2 }, { robe: '#2c6fd1', trim: '#e8f0ff', hat: 0 },
+];
 
-const send = (ws, o) => {
-  try { ws.send(JSON.stringify(o)); } catch { /* Socket weg */ }
-};
-const clean = (s, n = 16) => String(s ?? '').replace(/[<>\n\r]/g, '').slice(0, n).trim();
+const send = (ws, o) => { try { ws.send(JSON.stringify(o)); } catch { /* Socket weg */ } };
+const clean = (s, n = 14) => String(s ?? '').replace(/[<>\n\r]/g, '').slice(0, n).trim();
+const hex = (c, d) => (/^#[0-9a-fA-F]{6}$/.test(c) ? c : d);
 
 export default {
   async fetch(req, env) {
@@ -26,22 +30,23 @@ export default {
       try { id = env.MATCH.idFromString(url.pathname.split('/')[3] || ''); } catch { return new Response('Ungültiger Raum', { status: 400 }); }
       return env.MATCH.get(id).fetch(req);
     }
+    if (url.pathname === '/api/ping') return new Response('ok');
     return env.ASSETS.fetch(req);
   },
 };
 
 function acceptSocket() {
-  const pair = new WebSocketPair();
-  const [client, server] = Object.values(pair);
+  const [client, server] = Object.values(new WebSocketPair());
   server.accept();
   return { client, server };
 }
 
-// ---------------------------------------------------------------- Lobby
+// ================================================================ Lobby
 export class Lobby {
   constructor(state, env) {
     this.env = env;
-    this.waiting = []; // { ws, pid, name, timer }
+    this.waiting = []; // { ws, pid, name, trophies, since }
+    this.timer = null;
   }
 
   async fetch() {
@@ -50,12 +55,12 @@ export class Lobby {
     server.addEventListener('message', (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.t === 'queue' && !me) {
-        me = { ws: server, pid: clean(m.pid, 40), name: clean(m.name) || 'Zauberer', timer: null };
-        this.enqueue(me);
-      } else if (m.t === 'cancel') {
-        this.remove(me);
-        try { server.close(1000, 'cancel'); } catch {}
-      }
+        me = { ws: server, pid: clean(m.pid, 40), name: clean(m.name) || 'Zauberer', trophies: Math.max(0, Math.min(9999, Number(m.trophies) || 0)), since: Date.now() };
+        this.waiting.push(me);
+        send(server, { t: 'queued' });
+        this.pairUp();
+        this.ensureTimer();
+      } else if (m.t === 'cancel') { this.remove(me); try { server.close(1000, 'cancel'); } catch {} }
     });
     const gone = () => this.remove(me);
     server.addEventListener('close', gone);
@@ -65,46 +70,58 @@ export class Lobby {
 
   remove(p) {
     if (!p) return;
-    clearTimeout(p.timer);
     this.waiting = this.waiting.filter((w) => w !== p);
+    if (!this.waiting.length && this.timer) { clearInterval(this.timer); this.timer = null; }
   }
 
-  enqueue(p) {
-    // gleiche Spieler-ID nicht mit sich selbst paaren (z. B. zwei Tabs)
-    const opp = this.waiting.find((w) => w.pid !== p.pid);
-    if (opp) {
-      this.remove(opp);
-      const matchId = this.env.MATCH.newUniqueId().toString();
-      send(opp.ws, { t: 'match', matchId, bot: false });
-      send(p.ws, { t: 'match', matchId, bot: false });
-      return;
+  ensureTimer() {
+    if (this.timer) return;
+    this.timer = setInterval(() => this.pairUp(), 1000);
+  }
+
+  pairUp() {
+    const now = Date.now();
+    // Menschen paaren: je länger man wartet, desto größer der erlaubte Trophäen-Abstand
+    for (let i = 0; i < this.waiting.length; i++) {
+      for (let j = i + 1; j < this.waiting.length; j++) {
+        const a = this.waiting[i], b = this.waiting[j];
+        if (a.pid === b.pid) continue;
+        const wait = Math.min(now - a.since, now - b.since) / 1000;
+        if (Math.abs(a.trophies - b.trophies) <= 150 + 80 * wait) {
+          this.remove(a); this.remove(b);
+          const matchId = this.env.MATCH.newUniqueId().toString();
+          send(a.ws, { t: 'match', matchId, bot: false });
+          send(b.ws, { t: 'match', matchId, bot: false });
+          return this.pairUp();
+        }
+      }
     }
-    this.waiting.push(p);
-    send(p.ws, { t: 'queued' });
-    p.timer = setTimeout(() => {
-      if (!this.waiting.includes(p)) return;
-      this.remove(p);
-      send(p.ws, { t: 'match', matchId: this.env.MATCH.newUniqueId().toString(), bot: true });
-    }, BOT_WAIT_MS);
+    // Niemand gefunden: Bot-Gegner
+    for (const p of [...this.waiting]) {
+      if ((now - p.since) / 1000 >= BOT_WAIT_S) {
+        this.remove(p);
+        send(p.ws, { t: 'match', matchId: this.env.MATCH.newUniqueId().toString(), bot: true });
+      }
+    }
   }
 }
 
-// ---------------------------------------------------------------- Match
+// ================================================================ Match
 export class Match {
   constructor(state, env) {
-    this.humans = []; // { ws, pid, name, owned, pick, locked, idx, bot:false }
-    this.players = null;
-    this.G = null;
-    this.round = 0;
+    this.humans = [];
+    this.players = null; // [{ ws|null, bot, name, skin, trophies }]
+    this.duel = null;
     this.phase = 'wait';
     this.botMode = false;
-    this.timers = {};
-    this.waitTimer = null;
+    this.bots = [];
+    this.timers = [];
+    this.last = 0; this.acc = 0; this.snapN = 0;
   }
 
   async fetch() {
     const { client, server } = acceptSocket();
-    const h = { ws: server, joined: false, owned: [], pick: null, locked: false, bot: false, name: '?' };
+    const h = { ws: server, joined: false };
     server.addEventListener('message', (e) => this.onMessage(h, e.data));
     const gone = () => this.onLeave(h);
     server.addEventListener('close', gone);
@@ -112,123 +129,117 @@ export class Match {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  later(ms, fn) { const t = setTimeout(fn, ms); this.timers.push(t); return t; }
+
   onMessage(h, raw) {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.t === 'hello' && !h.joined && this.phase === 'wait' && this.humans.length < 2) {
-      h.joined = true;
-      h.name = clean(m.name) || 'Zauberer';
-      h.owned = Array.isArray(m.owned) ? m.owned.filter((id) => SPELL_BY_ID[id]).slice(0, 50) : [];
-      if (!h.owned.length) h.owned = ['feuerball'];
+      const deck = [...new Set(Array.isArray(m.deck) ? m.deck : [])].filter((id) => SPELL_BY_ID[id]).slice(0, 8);
+      if (!deck.length) deck.push('feuerball');
+      const levels = {};
+      for (const id of deck) levels[id] = Math.max(1, Math.min(MAX_LEVEL, Math.floor(Number((m.levels || {})[id]) || 1)));
+      Object.assign(h, {
+        joined: true, name: clean(m.name) || 'Zauberer', deck, levels,
+        trophies: Math.max(0, Math.min(9999, Number(m.trophies) || 0)),
+        skin: { robe: hex(m.skin && m.skin.robe, '#2c6fd1'), trim: hex(m.skin && m.skin.trim, '#ffd86b'), hat: Math.max(0, Math.min(5, Number(m.skin && m.skin.hat) || 0)) },
+        bot: false,
+      });
       this.humans.push(h);
       if (m.bot) this.botMode = true;
-      if (this.humans.length === 2) this.begin();
-      else if (this.botMode) this.begin();
-      else this.waitTimer = setTimeout(() => { this.botMode = true; this.begin(); }, 12000);
-    } else if (!h.joined || this.phase !== 'draw') {
+      if (this.humans.length === 2 || this.botMode) this.begin();
+      else this.later(12000, () => { if (this.phase === 'wait') { this.botMode = true; this.begin(); } });
       return;
-    } else if (m.t === 'pick' && !h.locked) {
-      h.pick = { id: m.id, acc: Number(m.acc) };
-    } else if (m.t === 'lock' && !h.locked && h.pick) {
-      h.locked = true;
-      const other = this.players && this.players.find((p) => p !== h && !p.bot);
-      if (other) send(other.ws, { t: 'ready' });
-      this.checkAllLocked();
+    }
+    if (!h.joined || !this.players) return;
+    const idx = this.players.indexOf(h);
+    if (idx < 0) return;
+    if (m.t === 'cast' && this.phase === 'play') {
+      this.duel.cast(idx, String(m.id), Number(m.acc));
+      this.flush();
+    } else if (m.t === 'emote') {
+      const now = Date.now();
+      if (now - (h.lastEmote || 0) < 1500) return;
+      h.lastEmote = now;
+      this.broadcast({ t: 'emote', p: idx, n: Math.max(0, Math.min(5, Math.floor(Number(m.n) || 0))) });
+    } else if (m.t === 'quit' && (this.phase === 'play' || this.phase === 'count')) {
+      this.endMatch(1 - idx, 'quit');
     }
   }
 
   onLeave(h) {
     if (!h.joined || this.phase === 'over') return;
     this.humans = this.humans.filter((x) => x !== h);
-    if (this.phase === 'wait') { clearTimeout(this.waitTimer); return; }
-    const stay = this.players.find((p) => !p.bot && p !== h);
-    this.end(stay ? stay.idx : -1, 'left');
+    if (this.phase === 'wait') return;
+    const idx = this.players ? this.players.indexOf(h) : -1;
+    if (idx >= 0) this.endMatch(1 - idx, 'left');
   }
+
+  broadcast(o) { for (const p of this.players || []) if (!p.bot) send(p.ws, o); }
 
   begin() {
-    clearTimeout(this.waitTimer);
     if (this.phase !== 'wait') return;
-    this.phase = 'starting';
+    this.phase = 'count';
     const h0 = this.humans[0];
-    const players = [h0];
-    if (this.humans.length === 2) players.push(this.humans[1]);
+    const list = [h0];
+    if (this.humans.length === 2) list.push(this.humans[1]);
     else {
-      // Bot-Gegner: Zauberauswahl passend zur Stärke des Menschen (fair, nicht übermächtig)
-      const best = Math.max(...h0.owned.map((id) => RARITY_ORDER.indexOf(SPELL_BY_ID[id].rarity)));
-      const pool = SPELLS.filter((s) => RARITY_ORDER.indexOf(s.rarity) <= best);
-      players.push({
-        bot: true, name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + ' (Bot)',
-        pool, pick: null, locked: false, ws: null, owned: null,
-      });
+      const maxRar = Math.max(...h0.deck.map((id) => RARITY_ORDER.indexOf(SPELL_BY_ID[id].rarity)));
+      const lvl = h0.trophies < 300 ? 1 : h0.trophies < 900 ? 2 : 3;
+      const deck = botDeck(maxRar, lvl);
+      list.push({ bot: true, ws: null, joined: true, name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], deck, levels: botLevels(deck, lvl), trophies: Math.max(0, h0.trophies + Math.round((Math.random() - 0.5) * 120)), skin: BOT_SKINS[Math.floor(Math.random() * BOT_SKINS.length)], botLevel: lvl });
     }
-    if (Math.random() < 0.5) players.reverse();
-    players.forEach((p, i) => { p.idx = i; });
-    this.players = players;
-    this.G = [newPlayer(), newPlayer()];
-    for (const p of players) {
-      if (p.bot) continue;
-      send(p.ws, { t: 'start', you: p.idx, names: players.map((x) => x.name), hp: MAX_HP, drawMs: DRAW_MS });
+    if (Math.random() < 0.5) list.reverse();
+    this.players = list;
+    this.duel = new Duel({ decks: list.map((p) => p.deck), levels: list.map((p) => p.levels) });
+    this.bots = list.map((p, i) => (p.bot ? makeBot(p.botLevel) : null));
+    const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+    const info = list.map((p) => ({ name: p.name, skin: p.skin, trophies: p.trophies, bot: !!p.bot, deck: p.deck }));
+    list.forEach((p, i) => { if (!p.bot) send(p.ws, { t: 'start', you: i, players: info, theme, countdown: COUNTDOWN_MS / 1000, levels: list.map((x) => x.levels) }); });
+    this.later(COUNTDOWN_MS, () => this.go());
+  }
+
+  go() {
+    if (this.phase !== 'count') return;
+    this.phase = 'play';
+    this.last = Date.now();
+    this.loop = setInterval(() => this.tick(), 50);
+    this.timers.push(this.loop);
+    this.broadcast({ t: 'go' });
+  }
+
+  tick() {
+    if (this.phase !== 'play') return;
+    const now = Date.now();
+    this.acc += Math.min(0.25, (now - this.last) / 1000);
+    this.last = now;
+    while (this.acc >= STEP && !this.duel.over) {
+      this.acc -= STEP;
+      this.bots.forEach((b, i) => { if (b) botStep(this.duel, i, b, STEP); });
+      this.duel.step(STEP);
+      if (++this.snapN % 4 === 0) this.broadcast({ t: 'snap', s: this.duel.snapshot() });
     }
-    this.timers.next = setTimeout(() => this.nextRound(), 2200);
+    this.flush();
+    if (this.duel.over) this.endMatch(this.duel.winner, this.duel.reason);
   }
 
-  nextRound() {
-    this.round += 1;
-    this.phase = 'draw';
-    for (const p of this.players) { p.pick = null; p.locked = false; }
-    for (const p of this.players) if (!p.bot) send(p.ws, { t: 'round', n: this.round, ms: DRAW_MS });
-    this.timers.draw = setTimeout(() => this.resolve(), DRAW_MS + GRACE_MS);
-    const bot = this.players.find((p) => p.bot);
-    if (bot) {
-      this.timers.bot = setTimeout(() => this.botPlay(bot), 2500 + Math.random() * 5500);
-    }
+  flush() {
+    const ev = this.duel.drain();
+    if (!ev.length) return;
+    this.players.forEach((p, i) => {
+      if (p.bot) return;
+      const mine = ev.filter((e) => e.k !== 'fizzle' || e.p === i);
+      if (mine.length) send(p.ws, { t: 'ev', ev: mine });
+    });
   }
 
-  botPlay(bot) {
-    if (this.phase !== 'draw') return;
-    const me = this.G[bot.idx];
-    const heals = bot.pool.filter((s) => s.fx.heal || s.fx.shield);
-    const attacks = bot.pool.filter((s) => s.fx.dmg);
-    let sp;
-    if (me.hp < 90 && heals.length && Math.random() < 0.55) sp = heals[Math.floor(Math.random() * heals.length)];
-    else sp = (attacks.length ? attacks : bot.pool)[Math.floor(Math.random() * (attacks.length || bot.pool.length))];
-    const thr = RARITIES[sp.rarity].thr;
-    const acc = Math.min(0.97, thr + 0.04 + Math.random() * (0.93 - thr));
-    bot.pick = { id: sp.id, acc };
-    bot.locked = true;
-    const human = this.players.find((p) => !p.bot);
-    if (human) send(human.ws, { t: 'ready' });
-    this.checkAllLocked();
-  }
-
-  checkAllLocked() {
-    if (this.phase === 'draw' && this.players.every((p) => p.locked)) this.resolve();
-  }
-
-  resolve() {
-    if (this.phase !== 'draw') return;
-    this.phase = 'resolve';
-    clearTimeout(this.timers.draw);
-    clearTimeout(this.timers.bot);
-    const plays = this.players.map((p) => validatePlay(p.pick, p.bot ? null : p.owned));
-    const events = resolveRound(this.G, plays);
-    const res = outcome(this.G, this.round);
-    const msg = {
-      t: 'resolve', n: this.round, events, state: this.G.map(snapshot),
-    };
-    for (const p of this.players) if (!p.bot) send(p.ws, msg);
-    if (res !== null) this.timers.over = setTimeout(() => this.end(res, 'ko'), RESOLVE_MS - 600);
-    else this.timers.next = setTimeout(() => this.nextRound(), RESOLVE_MS);
-  }
-
-  end(winner, reason) {
+  endMatch(winner, reason) {
     if (this.phase === 'over') return;
+    const wasPlaying = this.phase === 'play';
     this.phase = 'over';
-    Object.values(this.timers).forEach(clearTimeout);
-    clearTimeout(this.waitTimer);
-    const hp = this.G ? this.G.map((g) => g.hp) : [0, 0];
-    for (const p of this.players || []) if (!p.bot) send(p.ws, { t: 'end', winner, reason, hp });
-    setTimeout(() => {
-      for (const p of this.players || []) if (!p.bot) try { p.ws.close(1000, 'fertig'); } catch {}
-    }, 1500);
+    this.timers.forEach((t) => { clearTimeout(t); clearInterval(t); });
+    if (wasPlaying) this.flush();
+    const stats = this.duel ? this.duel.p.map((p) => ({ dmg: Math.round(p.stats.dmg), heal: Math.round(p.stats.heal), casts: p.stats.casts, acc: p.stats.casts ? Math.round((p.stats.accSum / p.stats.casts) * 100) : 0, hp: Math.round(p.hp) })) : [];
+    this.broadcast({ t: 'end', winner, reason, stats, time: this.duel ? Math.round(this.duel.t) : 0 });
+    setTimeout(() => { for (const p of this.players || []) if (!p.bot) try { p.ws.close(1000, 'fertig'); } catch {} }, 1500);
   }
 }
