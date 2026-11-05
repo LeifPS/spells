@@ -56,6 +56,13 @@ const maze = () => [[0, 0], [1, 0], [1, 1], [0.12, 1], [0.12, 0.14], [0.78, 0.14
 // Kreis, dann (ab oben) ein Pentagramm
 const sunstar = () => [...circle(48), ...star().slice(1)];
 
+// Fragezeichen: Haken oben (Dreiviertelkreis), dann Stiel
+const question = () => [...N(36, (t) => { const a = Math.PI + t * 1.5 * Math.PI; return [0.5 + 0.34 * Math.cos(a), 0.3 + 0.3 * Math.sin(a)]; }), [0.5, 0.82]];
+// Tropfen: Spitze oben, runder Bauch
+const teardrop = () => [[0.5, 0], ...N(40, (t) => { const a = Math.PI / 2 - Math.PI * 0.35 + t * Math.PI * 1.7; return [0.5 + 0.36 * Math.cos(a), 0.64 + 0.36 * Math.sin(a)]; }), [0.5, 0]];
+// Haken (J)
+const hook = () => [[0.7, 0], [0.7, 0.7], ...N(20, (t) => { const a = t * Math.PI; return [0.4 + 0.3 * Math.cos(a), 0.7 + 0.3 * Math.sin(a)]; })];
+
 export const SHAPES = {
   circle:   { closed: true, pts: circle() },
   vline:    { pts: [[0.5, 0], [0.5, 1]] },
@@ -89,4 +96,14 @@ export const SHAPES = {
   sunstar:  { mirror: true, pts: sunstar() },
   clover:   { closed: true, pts: clover() },
   rose5:    { closed: true, pts: rose5() },
+
+  // Erweiterung (v3)
+  lshape:   { pts: [[0, 0], [0, 1], [1, 1]] },
+  tshape:   { pts: [[0, 0], [1, 0], [0.5, 0], [0.5, 1]] },
+  chevl:    { pts: [[1, 0], [0, 0.5], [1, 1]] },
+  hook:     { pts: hook() },
+  teardrop: { closed: true, pts: teardrop() },
+  question: { pts: question() },
+  arrowdn:  { pts: [[0.5, 0], [0.5, 1], [0.18, 0.66], [0.5, 1], [0.82, 0.66]] },
+  wings:    { pts: [[0, 0], [0.25, 1], [0.5, 0.25], [0.75, 1], [1, 0]] },
 };

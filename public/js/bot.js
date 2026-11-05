@@ -65,6 +65,11 @@ export function botStep(duel, i, bot, dt) {
     if (f.shield || f.reflect) s += incoming ? 3.5 : me.shield > 0 ? -3 : 0.3;
     if (f.cleanse) s += me.burn || me.poison || me.stun > 0 || me.chill > 0 ? 2.5 : -2;
     if (f.haste) s += 0.5;
+    if (f.regen) s += me.hp < 140 && !me.regen ? 2.4 : -3;
+    if (f.curse) s += op.curse > 0.5 ? -2.5 : 1.3;
+    if (f.phase) s += incoming ? 3 : -1.5;
+    if (f.phoenix) s += me.phoenix > 0 ? -6 : me.hp < 110 ? 3 : 0.2;
+    if (f.gamble) s += 1.4;
     if (me.mana > 70 && sp.cost > 40) s += 1;
     s += (rng() - 0.5) * (3.2 - bot.level * 0.7);
     cands.push([id, s]);

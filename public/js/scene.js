@@ -394,6 +394,9 @@ export class Scene {
         if (s.burn > 0 && Math.random() < dt * 22) this.fx.flameAura(c.x + rnd(-0.35, 0.35) * pos.s, pos.y - rnd(0, 1.2) * pos.s, pos.s);
         if (s.poison > 0 && Math.random() < dt * 9) this.fx.bubbleAura(c.x + rnd(-0.35, 0.35) * pos.s, pos.y - rnd(0, 0.6) * pos.s, pos.s);
         if (s.chill > 0 && Math.random() < dt * 10) this.fx.frostAura(c.x + rnd(-0.4, 0.4) * pos.s, pos.y - rnd(0, 1.6) * pos.s, pos.s);
+        if (s.curse > 0 && Math.random() < dt * 12) this.fx.curseAura(c.x + rnd(-0.35, 0.35) * pos.s, pos.y - rnd(0, 1.4) * pos.s, pos.s);
+        if (s.regen > 0 && Math.random() < dt * 10) this.fx.regenAura(c.x + rnd(-0.4, 0.4) * pos.s, pos.y - rnd(0, 0.8) * pos.s, pos.s);
+        if (s.phoenix > 0 && Math.random() < dt * 16) this.fx.phoenixAura(c.x + rnd(-0.4, 0.4) * pos.s, pos.y - rnd(0, 1.2) * pos.s, pos.s);
         if (s.haste > 0 && Math.random() < dt * 14) this.fx.hasteAura(c.x, pos.y - rnd(0, 1.4) * pos.s, pos.s, i === this.you ? -1 : 1);
       }
     });

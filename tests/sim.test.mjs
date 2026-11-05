@@ -82,4 +82,60 @@ for (const [a, b, r] of [[2, 2, 1], [2, 2, 4], [3, 3, 4], [3, 1, 2]]) {
   const sudden = res.filter((x) => x.reason === 'time').length;
   console.log(`Bot ${a} vs Bot ${b} (Seltenheit<=${RARITY_ORDER[r]}): Ø ${avg.toFixed(0)} s, Siege ${w0}:${w1}, remis ${dr}, Zeitende ${sudden}`);
 }
+
+// --- Neue Mechaniken (v3)
+// Fluch: +30 % Schaden
+d = mk(['schwaechefluch', 'klingenhieb'], ['klingenhieb']);
+d.cast(0, 'schwaechefluch', 0.95); run(d, 1.0);
+assert.ok(d.p[1].curse > 5, 'verflucht');
+const hp0 = d.p[1].hp; d.drain();
+d.p[0].gcd = 0; d.p[0].cds = {};
+d.cast(0, 'klingenhieb', 0.9); run(d, 0.6);
+const dealt = hp0 - d.p[1].hp;
+assert.ok(dealt >= Math.round(13 * 0.8 * 1.3) - 1, 'Fluch erhöht Schaden: ' + dealt);
+
+// Regeneration heilt über Zeit
+d = mk(['heilquelle'], ['klingenhieb']); d.p[0].hp = 100;
+d.cast(0, 'heilquelle', 0.95); run(d, 7);
+assert.ok(d.p[0].hp >= 100 + 8 * 6 * 0.8 - 6, 'Heilquelle: ' + d.p[0].hp);
+assert.equal(d.p[0].regen, null, 'Regeneration endet');
+
+// Schattenschritt weicht dem nächsten Angriff aus
+d = mk(['schattenschritt'], ['blitz']);
+d.cast(0, 'schattenschritt', 0.9); d.cast(1, 'blitz', 0.9); run(d, 1.0);
+assert.equal(d.p[0].hp, 200, 'ausgewichen');
+
+// Phönix: Wiederauferstehung statt Tod (nur einmal)
+d = mk(['phoenixnest'], ['blitz', 'donnerschlag']);
+d.cast(0, 'phoenixnest', 0.95); d.drain(); d.p[0].hp = 10;
+d.cast(1, 'blitz', 0.95); run(d, 1.0);
+assert.ok(!d.over, 'Phönix hält das Duell am Leben');
+assert.ok(d.p[0].hp >= 70, 'wiederbelebt: ' + d.p[0].hp);
+assert.equal(d.ev.filter((e) => e.k === 'rebirth').length, 1, 'Rebirth-Event');
+d.p[1].gcd = 0; d.p[1].mana = 100; d.p[0].hp = 10; d.p[1].cds = {};
+d.cast(1, 'blitz', 0.95); run(d, 1.0);
+assert.ok(d.over && d.winner === 1, 'beim zweiten Mal kein Phönix mehr');
+
+// Glückswurf: deterministisch mit festem Zufall, jeder Ausgang funktioniert
+for (let r = 0; r < 6; r++) {
+  d = new Duel({ decks: [['glueckswurf'], ['klingenhieb']], levels: [{}, {}], rng: () => (r + 0.5) / 6 });
+  d.p[0].hp = 100; d.p[0].mana = 60;
+  const res = d.cast(0, 'glueckswurf', 0.95); assert.ok(res.ok);
+  const ce = d.ev.find((e) => e.k === 'cast'); assert.equal(ce.roll, r);
+  run(d, 2.0);
+  const out = [d.p[1].hp < 200, d.p[0].hp > 100, d.p[0].shield > 0, d.p[0].mana > 60 - 26 + 6, d.p[1].stun > 0 || d.p[1].hp < 200, d.p[1].burn || d.p[1].hp < 200][r];
+  assert.ok(out, 'Glückswurf Ausgang ' + r);
+}
+
+// Pfeilsalve: drei Treffer
+d = mk(['pfeilsalve'], ['klingenhieb']); d.cast(0, 'pfeilsalve', 0.9); run(d, 1.5);
+assert.equal(d.ev.filter((e) => e.k === 'hit').length, 3, 'drei Pfeile');
+
+// Bots spielen mit allen neuen Zaubern ohne Fehler
+for (const id of ['steinwall', 'pfeilsalve', 'schwaechefluch', 'schattenschritt', 'heilquelle', 'glueckswurf', 'meteor', 'phoenixnest']) {
+  d = mk([id, 'klingenhieb', 'heilfunke'], ['feuerball', 'blitz', 'schutzwall']);
+  const b0 = makeBot(3), b1 = makeBot(3);
+  for (let i = 0; i < 20 * 150 && !d.over; i++) { botStep(d, 0, b0, 0.05); botStep(d, 1, b1, 0.05); d.step(0.05); }
+}
+
 console.log('Simulation: alle Tests bestanden');

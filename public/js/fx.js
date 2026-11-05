@@ -190,6 +190,19 @@ export class FX {
   flameAura(x, y, s) { this.p({ x, y, vx: rnd(-10, 10), vy: rnd(-70, -35), size: s * rnd(0.13, 0.22), size1: 0, life: rnd(0.45, 0.8), pal: FIRE, a: 0.85, layer: 1 }); }
   bubbleAura(x, y, s) { this.p({ x, y, vx: rnd(-8, 8), vy: rnd(-45, -20), size: s * rnd(0.06, 0.12), size1: s * 0.04, life: rnd(0.7, 1.2), col: '#8dff4d', a: 0.8, shape: 'glow', layer: 1 }); }
   frostAura(x, y, s) { this.p({ x, y, vx: rnd(-10, 10), vy: rnd(-15, 15), size: s * 0.07, size1: 0, life: rnd(0.5, 0.9), col: '#cdf4ff', shape: 'star4', a: 0.9, layer: 1, vr: 3 }); }
+  curseAura(x, y, s) { this.p({ x, y, vx: rnd(-8, 8), vy: rnd(-40, -15), size: s * rnd(0.12, 0.2), size1: s * 0.05, life: rnd(0.6, 1.0), col: '#8a3ad0', shape: 'soft', a: 0.55, layer: 1 }); }
+  regenAura(x, y, s) { this.p({ x, y, vx: rnd(-6, 6), vy: rnd(-60, -30), size: s * 0.16, life: rnd(0.7, 1.1), col: '#7dffc8', shape: 'text', glyph: '+', a: 0.9, layer: 1 }); }
+  phoenixAura(x, y, s) { this.p({ x, y, vx: rnd(-12, 12), vy: rnd(-90, -40), size: s * rnd(0.06, 0.11), life: rnd(0.5, 0.9), pal: ['#fff6c0', '#ffb43a', '#ff6a1a'], a: 0.9, layer: 1 }); }
+  rebirth(e) {
+    const sc = this.sc, c = sc.chest(e.p), f = sc.feet(e.p), pos = sc.pos(e.p);
+    sc.flash('#fff0c0', 0.7); sc.shake(10); sc.slowmo(0.35, 0.25);
+    for (let k = 0; k < 4; k++) this.later(k * 90, () => this.ring(f.x, f.y, '#ffb43a', pos.s * (1.2 + k * 0.5), 0.7, 7, 0.3));
+    this.burst(c.x, c.y, { n: 70, pal: ['#fff6c0', '#ffb43a', '#ff6a1a'], speed: 420, size: 12, life: 1.0, ay: -140 });
+    this.burst(c.x, c.y, { n: 20, col: '#ffd35c', speed: 300, size: 8, life: 0.9, shape: 'star4' });
+    this.light(c.x, c.y, 320, '#ffb43a', 0.9, 0.9);
+    this.label(e.p, 'Wiedergeboren!', '#ffd35c'); this.number(e.p, `+${e.hp}`, '#6bff9a', 34);
+    sfx.levelUp();
+  }
   hasteAura(x, y, s, dir) { this.p({ x, y, vx: dir * rnd(120, 220), vy: 0, size: s * 0.1, life: 0.3, col: '#fff08a', shape: 'spark', a: 0.8, layer: 1 }); }
 
   // ------------------------------------------------------------ Zauber wirken
@@ -277,11 +290,13 @@ export class FX {
   }
   status(e) {
     const c = this.sc.chest(e.p), pos = this.sc.pos(e.p);
-    const L = { burn: ['Brennt!', '#ff9a4f'], poison: ['Vergiftet!', '#9dff6b'], chill: ['Frost!', '#8fe3ff'], stun: ['Betäubt!', '#ffe14d'], reflect: ['Spiegel!', '#eaf0ff'], phase: ['Phase!', '#c8d0ff'], haste: ['Hast!', '#fff08a'], gcd: ['Gestört!', '#c8f2ff'] }[e.type];
+    const L = { burn: ['Brennt!', '#ff9a4f'], poison: ['Vergiftet!', '#9dff6b'], chill: ['Frost!', '#8fe3ff'], stun: ['Betäubt!', '#ffe14d'], reflect: ['Spiegel!', '#eaf0ff'], phase: ['Phase!', '#c8d0ff'], curse: ['Verflucht!', '#c890ff'], regen: ['Quelle!', '#7dffc8'], phoenix: ['Phönix bereit!', '#ffb43a'], haste: ['Hast!', '#fff08a'], gcd: ['Gestört!', '#c8f2ff'] }[e.type];
     if (!L) return;
     if (e.type === 'reflect' || e.type === 'phase' || e.type === 'haste') this.ring(c.x, c.y, L[1], pos.s * 1.4, 0.5, 5);
     this.label(e.p, L[0], L[1]);
     if (e.type === 'chill') this.burst(c.x, c.y, { n: 14, pal: ICE, speed: 150, size: 6, life: 0.6, shape: 'star4' });
+    if (e.type === 'curse') { this.ring(c.x, c.y, '#8a3ad0', pos.s * 1.5, 0.6, 6); this.burst(c.x, c.y, { n: 16, pal: ['#e8c8ff', '#8a3ad0', '#3a0a6a'], speed: 140, size: 8, life: 0.7, ay: -40 }); }
+    if (e.type === 'phoenix') { this.ring(c.x, c.y, '#ffb43a', pos.s * 1.8, 0.8, 7); this.burst(c.x, c.y, { n: 26, pal: ['#fff6c0', '#ffb43a', '#ff6a1a'], speed: 200, size: 9, life: 0.9, ay: -120 }); }
     if (e.type === 'stun') this.burst(c.x, c.y - pos.s * 0.6, { n: 12, col: '#ffe14d', speed: 160, size: 7, life: 0.6, shape: 'star4' });
   }
   cleanse(e) {
@@ -317,6 +332,44 @@ function trail(pal, rate = 70, size = 9, o = {}) {
 }
 
 const CASTS = {
+  steinwall(fx, c) {
+    for (let k = 0; k < 6; k++) fx.later(k * 45, () => fx.p({ x: c.feet.x + (k - 2.5) * c.pos.s * 0.32, y: c.feet.y + rnd(-6, 6), vy: -rnd(260, 360), ay: 900, size: c.pos.s * rnd(0.22, 0.34), life: 0.9, col: '#b8946a', shape: 'rock', a: 1, rot: rnd(-1, 1), vr: rnd(-3, 3) }));
+    fx.smoke(c.feet.x, c.feet.y, 10, '#a08a66', 30, 1.0); fx.ring(c.feet.x, c.feet.y, '#b8946a', c.pos.s * 1.6, 0.6, 6, 0.3); fx.sc.shake(4);
+  },
+  pfeilsalve(fx, c) {
+    for (let k = 0; k < 3; k++) fx.later(k * 140, () => fx.launch(c.from, c.to, Math.max(0.2, c.dur), { arc: (1 - k) * 22, draw: (g, pr) => { g.translate(pr.x, pr.y); g.rotate(pr.ang); g.globalCompositeOperation = 'lighter'; glow(g, 0, 0, 16, '#ffcf8a', 0.55); g.globalAlpha = 1; g.fillStyle = '#fff6dc'; g.fillRect(-16, -1.6, 30, 3.2); g.beginPath(); g.moveTo(14, 0); g.lineTo(6, -5); g.lineTo(6, 5); g.fill(); }, trail: trail(['#ffcf8a', '#fff'], 50, 5) }));
+  },
+  schwaechefluch(fx, c) {
+    fx.launch(c.from, c.to, c.dur, { key: c.key, arc: 24, draw: orbDraw(['#f0d8ff', '#a05cd8', '#5a1aa8'], 11), trail: (f, pr, dt) => { pr.acc += dt * 55; while (pr.acc >= 1) { pr.acc -= 1; f.p({ x: pr.x + rnd(-5, 5), y: pr.y + rnd(-5, 5), vy: rnd(-30, 5), size: 10, size1: 20, life: rnd(0.4, 0.7), col: '#6a2ab0', shape: 'soft', a: 0.5 }); } } });
+  },
+  schattenschritt(fx, c) {
+    fx.smoke(c.c.x, c.c.y + c.pos.s * 0.3, 14, '#2a2a50', c.pos.s * 0.5, 1.3, -10); fx.ring(c.feet.x, c.feet.y, '#9aa0ff', c.pos.s * 1.5, 0.7, 6, 0.3);
+    fx.burst(c.c.x, c.c.y, { n: 18, pal: ['#e8eaff', '#9aa0ff', '#3a3a90'], speed: 160, size: 7, life: 0.9, ay: -30 }); fx.light(c.c.x, c.c.y, 170, '#7a80ff', 0.6, 0.5);
+  },
+  heilquelle(fx, c) {
+    fx.ring(c.feet.x, c.feet.y, '#58e0c0', c.pos.s * 1.5, 0.8, 6, 0.3);
+    for (let k = 0; k < 26; k++) fx.later(k * 22, () => fx.p({ x: c.feet.x + rnd(-0.25, 0.25) * c.pos.s, y: c.feet.y - 4, vx: rnd(-50, 50), vy: -rnd(300, 460), ay: 900, size: rnd(5, 9), life: 0.95, pal: ['#ffffff', '#9ff5e0', '#58e0c0'], a: 0.95 }));
+    fx.light(c.feet.x, c.feet.y - c.pos.s * 0.5, 190, '#58e0c0', 0.8, 0.5);
+  },
+  glueckswurf(fx, c) {
+    const E = [['Volltreffer!', '#ff9bf2'], ['Heilung!', '#6bff9a'], ['Schild!', '#9cc8ff'], ['Mana!', '#7ab8ff'], ['Betäubung!', '#ffe14d'], ['Feuer!', '#ff9a4f']];
+    const o = E[c.e.roll] || E[0];
+    for (let k = 0; k < 8; k++) fx.p({ x: c.c.x + rnd(-1, 1) * c.pos.s * 0.4, y: c.c.y - c.pos.s * 0.7, vx: rnd(-80, 80), vy: -rnd(120, 220), ay: 300, size: rnd(18, 28), life: 0.9, col: k % 2 ? '#ff9bf2' : '#fff', shape: 'text', glyph: k % 3 ? '?' : '!', a: 1, rot: rnd(-0.5, 0.5) });
+    fx.later(260, () => fx.label(c.i, o[0], o[1]));
+    if (c.e.hostile) fx.launch(c.from, c.to, c.dur, { key: c.key, arc: 40, draw: orbDraw(['#fff', o[1], o[1]], 11), trail: trail([o[1], '#fff'], 60, 8) });
+  },
+  meteor(fx, c) {
+    const from = { x: c.to.x - 160, y: -90 };
+    fx.ent(c.dur, (g, e, k) => { g.translate(c.tfeet.x, c.tfeet.y); g.scale(1, 0.3); g.globalCompositeOperation = 'lighter'; const r = c.tpos.s * (0.3 + 0.9 * k), pulse = 0.6 + 0.4 * Math.sin(k * 30); g.strokeStyle = `rgba(255,90,40,${0.35 + 0.5 * k * pulse})`; g.lineWidth = 4 + 6 * k; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.stroke(); g.fillStyle = `rgba(255,60,20,${0.12 * k})`; g.fill(); }, 0);
+    fx.launch(from, c.to, c.dur, { key: c.key, arc: 0, draw: orbDraw(['#fff6c0', '#ff8a1f', '#e0401a'], 26), trail: trail(FIRE, 120, 18, { smoke: true, up: -10 }) });
+  },
+  phoenixnest(fx, c) {
+    fx.sc.flash('#ffe8b0', 0.35);
+    for (let k = 0; k < 3; k++) fx.later(k * 120, () => fx.ring(c.feet.x, c.feet.y, '#ffb43a', c.pos.s * (1.2 + k * 0.5), 0.8, 6, 0.3));
+    for (let k = 0; k < 40; k++) fx.later(k * 16, () => fx.p({ x: c.feet.x + rnd(-1, 1) * c.pos.s * 0.6, y: c.feet.y, vx: rnd(-40, 40), vy: -rnd(120, 360), size: rnd(8, 15), life: rnd(0.8, 1.3), pal: ['#fff6c0', '#ffb43a', '#ff6a1a', '#6a1a10'], a: 0.95, ay: -40 }));
+    fx.light(c.c.x, c.c.y, 260, '#ffa23a', 0.9, 0.7);
+  },
+
   _default(fx, c) { fx.launch(c.from, c.to, c.dur, { key: c.key, arc: 30, draw: orbDraw([ '#fff', c.sp.color, c.sp.color ], 9), trail: trail([c.sp.color, '#fff'], 60, 8) }); },
 
   feuerball(fx, c) { fx.launch(c.from, c.to, c.dur, { key: c.key, arc: 50, draw: orbDraw(FIRE.slice(0, 3), 15), trail: trail(FIRE, 90, 14, { smoke: true, up: -20 }) }); },
@@ -441,6 +494,19 @@ function healAura(fx, c, col, n = 14, glyph = '+') {
 }
 
 const IMPACTS = {
+  pfeilsalve(fx, c) { fx.burst(c.at.x, c.at.y, { n: 8, pal: ['#fff', '#ffcf8a'], speed: 200, size: 5, life: 0.35, shape: 'spark' }); fx.light(c.at.x, c.at.y, 70, '#ffcf8a', 0.2, 0.6); },
+  schwaechefluch(fx, c) {
+    fx.ring(c.at.x, c.at.y, '#a05cd8', 100, 0.6, 7); fx.burst(c.at.x, c.at.y, { n: 22, pal: ['#f0d8ff', '#a05cd8', '#3a0a6a'], speed: 220, size: 9, life: 0.8, ay: -30 });
+    fx.ent(0.9, (g, e, k) => { g.translate(c.at.x, c.at.y - c.pos.s * 0.9); g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.sin(k * Math.PI); g.strokeStyle = '#c890ff'; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 16, 0, TAU); g.moveTo(-9, -9); g.lineTo(9, 9); g.moveTo(9, -9); g.lineTo(-9, 9); g.stroke(); });
+  },
+  glueckswurf(fx, c) { fx.burst(c.at.x, c.at.y, { n: 24, col: '#ff9bf2', speed: 260, size: 8, life: 0.6, shape: 'star4' }); fx.ring(c.at.x, c.at.y, '#ff9bf2', 90, 0.45); fx.light(c.at.x, c.at.y, 150, '#ff9bf2', 0.4, 0.6); },
+  meteor(fx, c) {
+    fx.sc.flash('#ffe0b0', 0.55); fx.sc.shake(16);
+    fx.burst(c.at.x, c.at.y, { n: 80, pal: FIRE, speed: 520, size: 15, life: 1.0, ay: 200 });
+    fx.burst(c.at.x, c.at.y, { n: 16, col: '#6a5a4a', speed: 420, size: 10, life: 1.0, shape: 'rock', ay: 700, drag: 0.5 });
+    fx.smoke(c.at.x, c.feet.y - 6, 14, '#3a3a48', 40, 1.5); fx.ring(c.feet.x, c.feet.y, '#ff8a1f', 240, 0.8, 11, 0.3); fx.ring(c.at.x, c.at.y, '#ffd23f', 130, 0.5, 8); fx.light(c.at.x, c.at.y, 280, '#ff8a1f', 0.7, 0.9);
+  },
+
   _default(fx, c) { fx.burst(c.at.x, c.at.y, { n: 24, col: c.sp.color, speed: 260, size: 8, life: 0.6 }); fx.ring(c.at.x, c.at.y, c.sp.color, 80, 0.45); fx.light(c.at.x, c.at.y, 140, c.sp.color, 0.4, 0.6); },
   feuerball(fx, c) { fx.burst(c.at.x, c.at.y, { n: 36, pal: FIRE, speed: 300, size: 12, life: 0.7, ay: 160 }); fx.smoke(c.at.x, c.at.y, 6, '#3a3a48', 30, 1.1); fx.ring(c.at.x, c.at.y, '#ff8a1f', 100, 0.45, 7); fx.light(c.at.x, c.at.y, 190, '#ff8a1f', 0.45, 0.8); },
   eissplitter(fx, c) { fx.burst(c.at.x, c.at.y, { n: 18, col: '#c8f4ff', speed: 300, size: 10, life: 0.7, shape: 'shard', ay: 200 }); fx.burst(c.at.x, c.at.y, { n: 12, pal: ICE, speed: 160, size: 6, life: 0.6, shape: 'star4' }); fx.ring(c.at.x, c.at.y, '#8fe3ff', 80, 0.4); fx.light(c.at.x, c.at.y, 150, '#8fe3ff', 0.4, 0.7); },

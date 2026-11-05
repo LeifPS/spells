@@ -9,7 +9,7 @@
 .ico{width:1.2em;height:1.2em;flex:0 0 auto;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
 .ico.i-coin{stroke:none;filter:drop-shadow(0 1px 1px #0008)}
 .ico.i-drop{color:#6cb8ff}.ico.i-trophy{color:#ffd36a}.ico.i-star{color:#ffd36a}.ico.i-heart{color:#ff6a8a}.ico.i-bolt{color:#ffe36a}
-.ico.e-flame{color:#ff8a3a}.ico.e-snow{color:#9ae4ff}.ico.e-skull{color:#9fe08a}.ico.e-heart{color:#ff6a8a}.ico.e-shield{color:#7fb4ff}.ico.e-drop{color:#6cb8ff}.ico.e-sparkle{color:#ffe08a}.ico.e-bolt{color:#ffe36a}.ico.e-sword{color:#ffb0a0}
+.ico.e-curse{color:#c890ff}.ico.e-leaf{color:#7dffc8}.ico.e-flame{color:#ff8a3a}.ico.e-snow{color:#9ae4ff}.ico.e-skull{color:#9fe08a}.ico.e-heart{color:#ff6a8a}.ico.e-shield{color:#7fb4ff}.ico.e-drop{color:#6cb8ff}.ico.e-sparkle{color:#ffe08a}.ico.e-bolt{color:#ffe36a}.ico.e-sword{color:#ffb0a0}
 
 /* Rang-Wappen */
 .rbadge{display:inline-block;flex:0 0 auto;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--c) 55%,transparent))}

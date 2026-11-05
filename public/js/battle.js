@@ -11,7 +11,7 @@ import { LocalSource, NetSource } from './net.js';
 import { icoHTML } from './icons.js';
 
 const EMOTES = ['👍', '😂', '😮', '😡', '👏', '🔥'];
-const STATUS_ICONS = { burn: 'flame', poison: 'skull', chill: 'snow', stun: 'star', reflect: 'mirror', phase: 'ghost', haste: 'bolt' };
+const STATUS_ICONS = { burn: 'flame', poison: 'skull', chill: 'snow', stun: 'star', reflect: 'mirror', phase: 'ghost', haste: 'bolt', curse: 'curse', regen: 'leaf', phoenix: 'sparkle' };
 const FIZZLE = { acc: 'Zu ungenau', gcd: 'Noch nicht bereit', cd: 'Noch nicht bereit', mana: 'Zu wenig Mana', stun: 'Betäubt!', deck: 'Nicht im Deck', over: '' };
 const TIPS = ['Tipp: Tippe auf ein Symbol in der Leiste, um dir die Form einblenden zu lassen.', 'Tipp: Du darfst mitten im Kampf jederzeit zeichnen – es gibt keine Runden.', 'Tipp: Schilde und Heilung vor einem großen Zauber aufbauen.', 'Tipp: Seltene Zauber brauchen eine sauberere Form – lieber langsam und deutlich zeichnen.', 'Tipp: Findet sich kein Gegner, kämpfst du nach kurzer Zeit gegen einen Bot.', 'Tipp: Mana regeneriert sich ständig – spare es nicht für ewig.'];
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -67,7 +67,7 @@ export class Battle {
     this.deckIds = [];
   }
 
-  blank() { return { hp: 200, hpShow: 200, hpGhost: 200, mana: 100, shield: 0, shT: 0, gcd: 0, cds: {}, stun: 0, chill: 0, haste: 0, burn: 0, poison: 0, reflect: 0, phase: 0 }; }
+  blank() { return { hp: 200, hpShow: 200, hpGhost: 200, mana: 100, shield: 0, shT: 0, gcd: 0, cds: {}, stun: 0, chill: 0, haste: 0, burn: 0, poison: 0, reflect: 0, phase: 0, curse: 0, regen: 0, phoenix: 0 }; }
 
   // ------------------------------------------------------------ Anzeigen / Steuerung
   show() { this.root.hidden = false; this.scene.resize(); this.pad.resize(); if (!this.raf) { this.last = performance.now(); const loop = (now) => { const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.tick(dt); this.raf = requestAnimationFrame(loop); }; this.raf = requestAnimationFrame(loop); } }
@@ -185,7 +185,7 @@ export class Battle {
     s.p.forEach((p, i) => {
       const st = this.st[i], now = performance.now();
       st.hp = p.hp; st.mana = p.mana; st.shield = p.shield; st.shT = p.shT;
-      st.stun = p.stun; st.chill = p.chill; st.haste = p.haste; st.burn = p.burn; st.poison = p.poison; st.reflect = p.reflect; st.phase = p.phase;
+      st.stun = p.stun; st.chill = p.chill; st.haste = p.haste; st.burn = p.burn; st.poison = p.poison; st.reflect = p.reflect; st.phase = p.phase; st.curse = p.curse || 0; st.regen = p.regen || 0; st.phoenix = p.phoenix || 0;
       if (i === this.you) {
         // eigene, noch nicht bestätigte Eingaben nicht überschreiben
         const o = this.opt;
@@ -224,6 +224,7 @@ export class Battle {
       case 'mana': fx.mana(e); break;
       case 'status': fx.status(e); break;
       case 'cleanse': fx.cleanse(e); sfx.good(); break;
+      case 'rebirth': this.setHp(e.p, e.hp); fx.rebirth(e); this.st[e.p].shield = 0; break;
       case 'evade': fx.evade(e); break;
       case 'reflect': fx.reflect(e); break;
       default: break;
@@ -362,7 +363,7 @@ export class Battle {
         s.mana = Math.min(CFG.maxMana, s.mana + reg * dt);
         s.gcd = Math.max(0, s.gcd - dt);
         for (const id in s.cds) s.cds[id] = Math.max(0, s.cds[id] - dt);
-        for (const k of ['stun', 'chill', 'haste', 'reflect', 'phase', 'burn', 'poison']) s[k] = Math.max(0, s[k] - dt);
+        for (const k of ['stun', 'chill', 'haste', 'reflect', 'phase', 'burn', 'poison', 'curse', 'regen', 'phoenix']) s[k] = Math.max(0, s[k] - dt);
         if (s.shT > 0) s.shT -= dt;
       }
     }

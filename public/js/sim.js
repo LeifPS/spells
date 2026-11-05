@@ -7,10 +7,10 @@ export const CFG = {
   tol: 0.28, // Latenz-Toleranz: ein Zauber darf kurz VOR Ablauf der Abklingzeit eintreffen
   duration: 150, suddenAt: 90, // Sudden Death
   chillGcd: 1.4, chillRegen: 0.6, hasteGcd: 0.6, hasteRegen: 1.4, hasteCd: 0.75,
-  dotTick: 0.5, reflectTravel: 0.5,
+  dotTick: 0.5, reflectTravel: 0.5, curseMul: 1.3,
 };
 
-const STATUSES = ['burn', 'poison', 'chill', 'stun', 'reflect', 'phase', 'haste'];
+const STATUSES = ['burn', 'poison', 'chill', 'stun', 'reflect', 'phase', 'haste', 'curse', 'regen', 'phoenix'];
 
 function newPlayer(deck, levels) {
   return {
@@ -18,13 +18,15 @@ function newPlayer(deck, levels) {
     hp: CFG.maxHp, mana: CFG.maxMana, gcd: 0, cds: {},
     shield: 0, shieldT: 0,
     burn: null, poison: null, chill: 0, stun: 0, reflect: 0, phase: 0, haste: 0,
+    curse: 0, regen: null, phoenix: 0, phoenixHp: 0.4,
     dotAcc: 0,
     stats: { dmg: 0, heal: 0, casts: 0, fails: 0, accSum: 0 },
   };
 }
 
 export class Duel {
-  constructor({ decks, levels = [{}, {}] }) {
+  constructor({ decks, levels = [{}, {}], rng = Math.random }) {
+    this.rng = rng;
     this.p = [newPlayer(decks[0], levels[0]), newPlayer(decks[1], levels[1])];
     this.t = 0;
     this.proj = [];
@@ -57,11 +59,13 @@ export class Duel {
     me.gcd = CFG.gcd * (me.chill > 0 ? CFG.chillGcd : 1) * (me.haste > 0 ? CFG.hasteGcd : 1);
     me.cds[id] = sp.cd * (me.haste > 0 ? CFG.hasteCd : 1);
     me.stats.casts++; me.stats.accSum += Math.min(1, acc);
-    const hostile = isHostile(sp);
-    this.push({ k: 'cast', p: i, id, acc: Math.round(acc * 100) / 100, lvl, travel: hostile ? sp.travel : 0, hostile });
+    // Glückswurf: ein zufälliger Effekt aus der Liste
+    let f = sp.fx, roll = null;
+    if (f.gamble) { roll = Math.floor(this.rng() * f.gamble.length); f = f.gamble[roll]; }
+    const hostile = isHostile({ fx: f });
+    this.push({ k: 'cast', p: i, id, acc: Math.round(acc * 100) / 100, lvl, travel: hostile ? sp.travel : 0, hostile, roll });
 
     // Selbst-Effekte sofort
-    const f = sp.fx;
     if (f.cleanse) this.cleanse(i);
     if (f.heal) this.heal(i, Math.round(f.heal * pw), 'spell');
     if (f.shield) this.addShield(i, Math.round(f.shield[0] * pw), f.shield[1]);
@@ -69,8 +73,10 @@ export class Duel {
     if (f.reflect) this.status(i, 'reflect', f.reflect);
     if (f.phase) this.status(i, 'phase', f.phase);
     if (f.haste) this.status(i, 'haste', f.haste);
+    if (f.regen) { me.regen = { hps: f.regen[0] * pw, t: f.regen[1] }; this.push({ k: 'status', p: i, type: 'regen', dur: f.regen[1] }); }
+    if (f.phoenix) { me.phoenix = f.phoenix[0]; me.phoenixHp = f.phoenix[1]; this.push({ k: 'status', p: i, type: 'phoenix', dur: f.phoenix[0] }); }
 
-    if (hostile) this.proj.push({ id, src: i, tgt: 1 - i, t: sp.travel, pw, hitIdx: 0, hits: f.hits || 1, gap: f.hitGap || 0.2, wait: 0, reflected: false, landed: false });
+    if (hostile) this.proj.push({ id, src: i, tgt: 1 - i, t: sp.travel, pw, hitIdx: 0, hits: f.hits || 1, gap: f.hitGap || 0.2, wait: 0, reflected: false, landed: false, fx: f });
     return { ok: true };
   }
 
@@ -100,11 +106,12 @@ export class Duel {
   }
   cleanse(i) {
     const me = this.p[i];
-    me.burn = null; me.poison = null; me.chill = 0; me.stun = 0;
+    me.burn = null; me.poison = null; me.chill = 0; me.stun = 0; me.curse = 0;
     this.push({ k: 'cleanse', p: i });
   }
 
   damage(T, amount, pierceShield) {
+    if (T.curse > 0) amount = Math.round(amount * CFG.curseMul);
     let absorbed = 0;
     if (!pierceShield && T.shield > 0) { absorbed = Math.min(T.shield, amount); T.shield -= absorbed; }
     const dealt = amount - absorbed;
@@ -114,7 +121,7 @@ export class Duel {
 
   // Ein Geschoss kommt an (erster Treffer) bzw. weitere Treffer einer Salve
   land(pr) {
-    const T = this.p[pr.tgt], S = this.p[pr.src], sp = SPELL_BY_ID[pr.id], f = sp.fx;
+    const T = this.p[pr.tgt], S = this.p[pr.src], sp = SPELL_BY_ID[pr.id], f = pr.fx || sp.fx;
     if (pr.hitIdx === 0) {
       if (!f.pierce && T.phase > 0) { T.phase = 0; this.push({ k: 'evade', p: pr.tgt, id: pr.id }); pr.landed = true; pr.hitIdx = pr.hits; return; }
       if (!f.pierce && T.reflect > 0 && !pr.reflected) {
@@ -128,6 +135,7 @@ export class Duel {
       if (f.poison) this.status(pr.tgt, 'poison', f.poison[1], f.poison[0] * pr.pw);
       if (f.chill) this.status(pr.tgt, 'chill', f.chill);
       if (f.stun) this.status(pr.tgt, 'stun', f.stun);
+      if (f.curse) this.status(pr.tgt, 'curse', f.curse);
       if (f.gcdHit) { T.gcd += f.gcdHit; this.push({ k: 'status', p: pr.tgt, type: 'gcd', dur: f.gcdHit }); }
     }
     if (f.dmg) {
@@ -154,12 +162,13 @@ export class Duel {
       for (const id in me.cds) if (me.cds[id] > 0) me.cds[id] = Math.max(0, me.cds[id] - dt);
       const regen = CFG.regen * (me.chill > 0 ? CFG.chillRegen : 1) * (me.haste > 0 ? CFG.hasteRegen : 1);
       me.mana = Math.min(CFG.maxMana, me.mana + regen * dt);
-      for (const s of ['chill', 'stun', 'reflect', 'phase', 'haste']) if (me[s] > 0) me[s] = Math.max(0, me[s] - dt);
+      for (const s of ['chill', 'stun', 'reflect', 'phase', 'haste', 'curse', 'phoenix']) if (me[s] > 0) me[s] = Math.max(0, me[s] - dt);
       if (me.shieldT > 0) { me.shieldT -= dt; if (me.shieldT <= 0 && me.shield > 0) { me.shield = 0; me.shieldT = 0; this.push({ k: 'shield', p: i, amount: 0, total: 0, expired: true }); } }
-      // Dauerschaden
+      // Dauerschaden / Regeneration
       me.dotAcc += dt;
       while (me.dotAcc >= CFG.dotTick) {
         me.dotAcc -= CFG.dotTick;
+        if (me.regen) { this.heal(i, Math.max(1, Math.round(me.regen.hps * CFG.dotTick)), 'regen'); me.regen.t -= CFG.dotTick; if (me.regen.t <= 0) { me.regen = null; this.push({ k: 'statusEnd', p: i, type: 'regen' }); } }
         for (const type of ['burn', 'poison']) {
           const d = me[type];
           if (!d) continue;
@@ -193,6 +202,15 @@ export class Duel {
       }
     }
 
+    // Phönix: statt zu sterben wiederauferstehen
+    for (let i = 0; i < 2; i++) {
+      const me = this.p[i];
+      if (me.hp <= 0 && me.phoenix > 0) {
+        me.phoenix = 0; me.hp = Math.round(CFG.maxHp * me.phoenixHp); me.burn = null; me.poison = null; me.chill = 0; me.stun = 0; me.curse = 0; me.shield = 0; me.shieldT = 0;
+        this.push({ k: 'rebirth', p: i, hp: Math.round(me.hp) });
+      }
+    }
+
     // Ende?
     const d0 = this.p[0].hp <= 0, d1 = this.p[1].hp <= 0;
     if (d0 || d1) this.finish(d0 && d1 ? -1 : d0 ? 1 : 0, 'ko');
@@ -214,6 +232,7 @@ export class Duel {
         shield: Math.round(me.shield), shT: r1(me.shieldT),
         burn: me.burn ? r1(me.burn.t) : 0, poison: me.poison ? r1(me.poison.t) : 0,
         chill: r1(me.chill), stun: r1(me.stun), reflect: r1(me.reflect), phase: r1(me.phase), haste: r1(me.haste),
+        curse: r1(me.curse), regen: me.regen ? r1(me.regen.t) : 0, phoenix: r1(me.phoenix),
       })),
       pr: this.proj.filter((x) => !x.landed).map((x) => [x.id, x.src, Math.round(x.t * 10) / 10]),
     };

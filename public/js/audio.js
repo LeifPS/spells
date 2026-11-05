@@ -99,6 +99,7 @@ const FAM = {
   schlangenbiss: 'poison', giftwolke: 'poison',
   schutzwall: 'shield', spiegel: 'shield', lichtkreuz: 'holy',
   zeitsand: 'time', zeitriss: 'time',
+  steinwall: 'earth', pfeilsalve: 'blade', schwaechefluch: 'dark', schattenschritt: 'wind', heilquelle: 'heal', glueckswurf: 'arcane', meteor: 'fire', phoenixnest: 'holy',
   pentagramm: 'dark', seelenraub: 'dark', schwarzesloch: 'dark', labyrinth: 'arcane', sternenbluete: 'arcane',
 };
 
