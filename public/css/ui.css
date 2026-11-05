@@ -62,3 +62,8 @@
 .coinfall .ico{position:absolute;top:-30px;width:26px;height:26px;animation:cfall var(--d,1.6s) cubic-bezier(.4,.1,.6,1) var(--w,0s) forwards;opacity:0}
 @keyframes cfall{0%{opacity:1;transform:translateY(0) rotateY(0)}100%{opacity:1;transform:translateY(105vh) rotateY(720deg)}}
 @media (prefers-reduced-motion:reduce){.coinfall,.btn::after{display:none}}
+
+/* Sterne (Schwierigkeit) & erledigt-Haken */
+.stars{display:inline-flex;gap:2px;vertical-align:middle}
+.stars .ico{width:15px;height:15px}.stars .ico.dim{opacity:.22}
+.pq em .ico{color:#6bff9a;width:1.2em;height:1.2em}

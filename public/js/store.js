@@ -7,11 +7,11 @@ export const STARTER = ['feuerball', 'eissplitter', 'windstoss', 'klingenhieb', 
 
 // ------------------------------------------------------------ Ränge
 export const RANKS = [
-  { name: 'Lehrling', min: 0, icon: '🪄', color: '#b9c3d6' },
-  { name: 'Adept', min: 300, icon: '📜', color: '#6fd08a' },
-  { name: 'Magier', min: 700, icon: '🔮', color: '#4da8ff' },
-  { name: 'Erzmagier', min: 1200, icon: '⚡', color: '#b565ff' },
-  { name: 'Großmeister', min: 2000, icon: '👑', color: '#ffb52e' },
+  { name: 'Lehrling', min: 0, color: '#b9c3d6' },
+  { name: 'Adept', min: 300, color: '#6fd08a' },
+  { name: 'Magier', min: 700, color: '#4da8ff' },
+  { name: 'Erzmagier', min: 1200, color: '#b565ff' },
+  { name: 'Großmeister', min: 2000, color: '#ffb52e' },
 ];
 export function rankOf(t) {
   let i = 0;

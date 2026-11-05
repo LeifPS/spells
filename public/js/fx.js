@@ -2,6 +2,7 @@
 import { TAU, clamp, lerp, rnd, pick, easeOut, easeInOut, rgba, lighten, darken, glow, glowSprite, softSprite, mix } from './gfx.js';
 import { SPELL_BY_ID } from './spells.js';
 import { sfx } from './audio.js';
+import { drawIcon } from './icons.js';
 
 const FIRE = ['#fff6c0', '#ffd23f', '#ff8a1f', '#e0401a', '#6a1a10'];
 const ICE = ['#ffffff', '#c8f4ff', '#7fd8ff', '#3fa0e0'];
@@ -72,9 +73,9 @@ export class FX {
     });
   }
 
-  number(i, text, col, size = 26, dx = 0) {
+  number(i, text, col, size = 26, dx = 0, icon = null) {
     const h = this.sc.head(i), pos = this.sc.pos(i);
-    this.nums.push({ x: h.x + dx + rnd(-10, 10), y: h.y - 0.35 * pos.s, vy: -70, life: 1.25, max: 1.25, text, col, size });
+    this.nums.push({ x: h.x + dx + rnd(-10, 10), y: h.y - 0.35 * pos.s, vy: -70, life: 1.25, max: 1.25, text, col, size, icon });
   }
   label(i, text, col) { this.number(i, text, col, 17, 0); this.nums[this.nums.length - 1].y -= 22; }
 
@@ -145,7 +146,7 @@ export class FX {
         g.save(); g.translate(q.x, q.y); g.rotate(q.rot); g.fillStyle = col;
         g.beginPath(); g.moveTo(size, 0); g.lineTo(size * 0.2, -size * 0.9); g.lineTo(-size * 0.8, -size * 0.3); g.lineTo(-size * 0.6, size * 0.7); g.lineTo(size * 0.3, size * 0.8); g.closePath(); g.fill(); g.restore(); break;
       }
-      case 'text': g.font = `700 ${size}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = col; g.fillText(q.glyph, q.x, q.y); break;
+      case 'text': g.save(); g.translate(q.x, q.y); g.rotate(q.rot || 0); drawIcon(g, q.glyph, 0, 0, size * 1.25, col, { solid: true, lw: 2.2 }); g.restore(); break;
       case 'star4': {
         g.save(); g.translate(q.x, q.y); g.rotate(q.rot); g.fillStyle = col; g.beginPath();
         for (let i = 0; i < 8; i++) { const r = i % 2 ? size * 0.28 : size; const an = i * Math.PI / 4; g[i ? 'lineTo' : 'moveTo'](Math.cos(an) * r, Math.sin(an) * r); }
@@ -182,7 +183,9 @@ export class FX {
       g.save(); g.globalAlpha = clamp(n.life * 2.2); g.translate(n.x, n.y); g.scale(pop, pop);
       g.font = `900 ${n.size}px system-ui, -apple-system, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineJoin = 'round'; g.lineWidth = Math.max(4, n.size * 0.22); g.strokeStyle = 'rgba(10,4,30,.85)'; g.strokeText(n.text, 0, 0);
-      g.fillStyle = n.col; g.fillText(n.text, 0, 0); g.restore();
+      g.fillStyle = n.col; g.fillText(n.text, 0, 0);
+      if (n.icon) { const w = g.measureText(n.text).width; drawIcon(g, n.icon, -w / 2 - n.size * 0.55, 0, n.size * 1.05, n.col, { solid: true, lw: 2.4, shadow: 'rgba(10,4,30,.9)', blur: 3 }); }
+      g.restore();
     }
   }
 
@@ -191,7 +194,7 @@ export class FX {
   bubbleAura(x, y, s) { this.p({ x, y, vx: rnd(-8, 8), vy: rnd(-45, -20), size: s * rnd(0.06, 0.12), size1: s * 0.04, life: rnd(0.7, 1.2), col: '#8dff4d', a: 0.8, shape: 'glow', layer: 1 }); }
   frostAura(x, y, s) { this.p({ x, y, vx: rnd(-10, 10), vy: rnd(-15, 15), size: s * 0.07, size1: 0, life: rnd(0.5, 0.9), col: '#cdf4ff', shape: 'star4', a: 0.9, layer: 1, vr: 3 }); }
   curseAura(x, y, s) { this.p({ x, y, vx: rnd(-8, 8), vy: rnd(-40, -15), size: s * rnd(0.12, 0.2), size1: s * 0.05, life: rnd(0.6, 1.0), col: '#8a3ad0', shape: 'soft', a: 0.55, layer: 1 }); }
-  regenAura(x, y, s) { this.p({ x, y, vx: rnd(-6, 6), vy: rnd(-60, -30), size: s * 0.16, life: rnd(0.7, 1.1), col: '#7dffc8', shape: 'text', glyph: '+', a: 0.9, layer: 1 }); }
+  regenAura(x, y, s) { this.p({ x, y, vx: rnd(-6, 6), vy: rnd(-60, -30), size: s * 0.16, life: rnd(0.7, 1.1), col: '#7dffc8', shape: 'text', glyph: 'plus', a: 0.9, layer: 1 }); }
   phoenixAura(x, y, s) { this.p({ x, y, vx: rnd(-12, 12), vy: rnd(-90, -40), size: s * rnd(0.06, 0.11), life: rnd(0.5, 0.9), pal: ['#fff6c0', '#ffb43a', '#ff6a1a'], a: 0.9, layer: 1 }); }
   rebirth(e) {
     const sc = this.sc, c = sc.chest(e.p), f = sc.feet(e.p), pos = sc.pos(e.p);
@@ -235,7 +238,7 @@ export class FX {
       sfx.hit(e.amount);
     }
     if (e.absorbed > 0) {
-      this.number(t, `🛡 ${e.absorbed}`, '#9cc8ff', 18, e.amount > 0 ? 34 : 0);
+      this.number(t, `${e.absorbed}`, '#9cc8ff', 18, e.amount > 0 ? 34 : 0, 'shield');
       this.burst(c.x, c.y, { n: 10, col: '#9cc8ff', speed: 220, size: 6, life: 0.4 });
       sfx.block();
     }
@@ -271,13 +274,13 @@ export class FX {
     }
     if (e.amount < 3) return;
     this.burst(c.x, c.y, { n: 14, col: '#7dffa8', speed: 60, size: 7, life: 0.9, ay: -80, drag: 1 });
-    for (let k = 0; k < 5; k++) this.p({ x: c.x + rnd(-0.4, 0.4) * pos.s, y: c.y + rnd(0, 0.6) * pos.s, vy: rnd(-90, -50), size: rnd(16, 24), life: 1.0, col: '#8dffb0', shape: 'text', glyph: '+', a: 1 });
+    for (let k = 0; k < 5; k++) this.p({ x: c.x + rnd(-0.4, 0.4) * pos.s, y: c.y + rnd(0, 0.6) * pos.s, vy: rnd(-90, -50), size: rnd(16, 24), life: 1.0, col: '#8dffb0', shape: 'text', glyph: 'plus', a: 1 });
   }
   shield(e) {
     if (e.amount < 0) { const c = this.sc.chest(e.p); this.burst(c.x, c.y, { n: 24, col: '#9cc8ff', speed: 300, size: 7, life: 0.5, shape: 'spark' }); this.label(e.p, 'Schild zerstört!', '#9cc8ff'); return; }
     if (e.expired) { const c = this.sc.chest(e.p); this.burst(c.x, c.y, { n: 12, col: '#9cc8ff', speed: 160, size: 5, life: 0.5 }); return; }
     const c = this.sc.chest(e.p), pos = this.sc.pos(e.p);
-    this.number(e.p, `🛡 ${e.amount}`, '#9cc8ff', 24);
+    this.number(e.p, `${e.amount}`, '#9cc8ff', 24, 0, 'shield');
     this.ring(c.x, c.y, '#9cc8ff', pos.s * 1.6, 0.5, 6);
     this.burst(c.x, c.y, { n: 18, col: '#d0e6ff', speed: pos.s * 2.2, size: 5, life: 0.5, shape: 'spark' });
     this.light(c.x, c.y, pos.s * 2, '#6aa8ff', 0.4, 0.5);
@@ -285,7 +288,7 @@ export class FX {
   }
   mana(e) {
     const c = this.sc.chest(e.p);
-    this.number(e.p, `+${e.amount} 💧`, '#7ab8ff', 22);
+    this.number(e.p, `+${e.amount}`, '#7ab8ff', 22, 0, 'drop');
     for (let k = 0; k < 10; k++) this.p({ x: c.x + rnd(-40, 40), y: c.y + 60, vy: rnd(-120, -60), size: rnd(5, 9), life: 0.8, col: '#7ab8ff', a: 0.9, ay: 0 });
   }
   status(e) {
@@ -307,7 +310,7 @@ export class FX {
   }
   dot(e) {
     const c = this.sc.chest(e.p);
-    if (e.type === 'sudden') { this.number(e.p, `☠ ${e.amount}`, '#ff4a7d', 22); this.sc.trigger(e.p, 'hurt', 0.6); return; }
+    if (e.type === 'sudden') { this.number(e.p, `${e.amount}`, '#ff4a7d', 22, 0, 'skull'); this.sc.trigger(e.p, 'hurt', 0.6); return; }
     if (e.amount <= 0) return;
     const col = e.type === 'burn' ? '#ffa04a' : '#9dff6b';
     this.number(e.p, String(e.amount), col, 17);
@@ -354,7 +357,7 @@ const CASTS = {
   glueckswurf(fx, c) {
     const E = [['Volltreffer!', '#ff9bf2'], ['Heilung!', '#6bff9a'], ['Schild!', '#9cc8ff'], ['Mana!', '#7ab8ff'], ['Betäubung!', '#ffe14d'], ['Feuer!', '#ff9a4f']];
     const o = E[c.e.roll] || E[0];
-    for (let k = 0; k < 8; k++) fx.p({ x: c.c.x + rnd(-1, 1) * c.pos.s * 0.4, y: c.c.y - c.pos.s * 0.7, vx: rnd(-80, 80), vy: -rnd(120, 220), ay: 300, size: rnd(18, 28), life: 0.9, col: k % 2 ? '#ff9bf2' : '#fff', shape: 'text', glyph: k % 3 ? '?' : '!', a: 1, rot: rnd(-0.5, 0.5) });
+    for (let k = 0; k < 8; k++) fx.p({ x: c.c.x + rnd(-1, 1) * c.pos.s * 0.4, y: c.c.y - c.pos.s * 0.7, vx: rnd(-80, 80), vy: -rnd(120, 220), ay: 300, size: rnd(18, 28), life: 0.9, col: k % 2 ? '#ff9bf2' : '#fff', shape: 'text', glyph: k % 3 ? 'quest' : 'exclam', a: 1, rot: rnd(-0.5, 0.5) });
     fx.later(260, () => fx.label(c.i, o[0], o[1]));
     if (c.e.hostile) fx.launch(c.from, c.to, c.dur, { key: c.key, arc: 40, draw: orbDraw(['#fff', o[1], o[1]], 11), trail: trail([o[1], '#fff'], 60, 8) });
   },
@@ -422,8 +425,8 @@ const CASTS = {
   },
 
   herzkraft(fx, c) {
-    healAura(fx, c, '#ff6fa5', 16, '♥');
-    fx.ent(0.9, (g, e, k) => { g.globalAlpha = (1 - k) * 0.9; g.font = `${Math.round(c.pos.s * (1.2 + k))}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ff6fa5'; g.shadowColor = '#ff6fa5'; g.shadowBlur = 24; g.fillText('♥', c.c.x, c.c.y - k * 40); });
+    healAura(fx, c, '#ff6fa5', 16, 'heart');
+    fx.ent(0.9, (g, e, k) => { g.globalAlpha = (1 - k) * 0.9; drawIcon(g, 'heart', c.c.x, c.c.y - k * 40, c.pos.s * (1.2 + k), '#ff6fa5', { solid: true, shadow: '#ff6fa5', blur: 24, lw: 1.4 }); });
   },
   pentagramm(fx, c) {
     const f = c.tfeet, R = c.tpos.s * 1.5;
@@ -475,7 +478,7 @@ const CASTS = {
     fx.sc.flash('#ff7a2a', 0.18);
   },
   schicksalsklee(fx, c) {
-    for (let k = 0; k < 26; k++) fx.p({ x: c.c.x, y: c.c.y, size: rnd(18, 30), life: rnd(1.4, 2.0), col: pick(['#37ffb0', '#fff2a8', '#ffffff']), shape: 'text', glyph: pick(['☘', '✦', '✿']), a: 1, orbit: true, ox: c.c.x, oy: c.c.y, oa: Math.random() * TAU, or: rnd(c.pos.s * 0.5, c.pos.s * 1.4), od: rnd(2, 4) * (Math.random() < 0.5 ? 1 : -1) });
+    for (let k = 0; k < 26; k++) fx.p({ x: c.c.x, y: c.c.y, size: rnd(18, 30), life: rnd(1.4, 2.0), col: pick(['#37ffb0', '#fff2a8', '#ffffff']), shape: 'text', glyph: pick(['clover', 'sparkle', 'flower']), a: 1, orbit: true, ox: c.c.x, oy: c.c.y, oa: Math.random() * TAU, or: rnd(c.pos.s * 0.5, c.pos.s * 1.4), od: rnd(2, 4) * (Math.random() < 0.5 ? 1 : -1) });
     fx.ring(c.feet.x, c.feet.y, '#37ffb0', c.pos.s * 2.4, 0.9, 8, 0.3); fx.ring(c.c.x, c.c.y, '#fff2a8', c.pos.s * 1.8, 0.7, 6);
     fx.light(c.c.x, c.c.y, 280, '#37ffb0', 0.9, 0.6); fx.sc.flash('#37ffb0', 0.22);
   },
@@ -487,9 +490,9 @@ const CASTS = {
   },
 };
 
-function healAura(fx, c, col, n = 14, glyph = '+') {
+function healAura(fx, c, col, n = 14, glyph = 'plus') {
   fx.ring(c.feet.x, c.feet.y, col, c.pos.s * 1.5, 0.7, 6, 0.3);
-  for (let k = 0; k < n; k++) fx.later(k * 35, () => fx.p({ x: c.c.x + rnd(-0.5, 0.5) * c.pos.s, y: c.feet.y - rnd(0, 0.5) * c.pos.s, vy: rnd(-130, -70), size: rnd(7, 12), life: 1.0, col, a: 0.95, shape: glyph === '+' && k % 3 === 0 ? 'text' : 'glow', glyph, ax: 0 }));
+  for (let k = 0; k < n; k++) fx.later(k * 35, () => fx.p({ x: c.c.x + rnd(-0.5, 0.5) * c.pos.s, y: c.feet.y - rnd(0, 0.5) * c.pos.s, vy: rnd(-130, -70), size: rnd(7, 12), life: 1.0, col, a: 0.95, shape: glyph !== 'plus' || k % 3 === 0 ? 'text' : 'glow', glyph, ax: 0 }));
   fx.light(c.c.x, c.c.y, 180, col, 0.6, 0.55);
 }
 
@@ -510,13 +513,13 @@ const IMPACTS = {
   _default(fx, c) { fx.burst(c.at.x, c.at.y, { n: 24, col: c.sp.color, speed: 260, size: 8, life: 0.6 }); fx.ring(c.at.x, c.at.y, c.sp.color, 80, 0.45); fx.light(c.at.x, c.at.y, 140, c.sp.color, 0.4, 0.6); },
   feuerball(fx, c) { fx.burst(c.at.x, c.at.y, { n: 36, pal: FIRE, speed: 300, size: 12, life: 0.7, ay: 160 }); fx.smoke(c.at.x, c.at.y, 6, '#3a3a48', 30, 1.1); fx.ring(c.at.x, c.at.y, '#ff8a1f', 100, 0.45, 7); fx.light(c.at.x, c.at.y, 190, '#ff8a1f', 0.45, 0.8); },
   eissplitter(fx, c) { fx.burst(c.at.x, c.at.y, { n: 18, col: '#c8f4ff', speed: 300, size: 10, life: 0.7, shape: 'shard', ay: 200 }); fx.burst(c.at.x, c.at.y, { n: 12, pal: ICE, speed: 160, size: 6, life: 0.6, shape: 'star4' }); fx.ring(c.at.x, c.at.y, '#8fe3ff', 80, 0.4); fx.light(c.at.x, c.at.y, 150, '#8fe3ff', 0.4, 0.7); },
-  windstoss(fx, c) { fx.burst(c.at.x, c.at.y, { n: 22, col: '#e8fbff', speed: 360, size: 6, life: 0.5, shape: 'spark' }); fx.ring(c.at.x, c.at.y, '#e8fbff', 110, 0.4, 8); for (let k = 0; k < 4; k++) fx.p({ x: c.at.x, y: c.at.y + rnd(-20, 20), vx: rnd(-200, 200), vy: rnd(-120, -20), size: 12, col: '#9cd88a', shape: 'text', glyph: '🍃', life: 0.8, a: 1, drag: 1.5 }); },
+  windstoss(fx, c) { fx.burst(c.at.x, c.at.y, { n: 22, col: '#e8fbff', speed: 360, size: 6, life: 0.5, shape: 'spark' }); fx.ring(c.at.x, c.at.y, '#e8fbff', 110, 0.4, 8); for (let k = 0; k < 4; k++) fx.p({ x: c.at.x, y: c.at.y + rnd(-20, 20), vx: rnd(-200, 200), vy: rnd(-120, -20), size: 12, col: '#9cd88a', shape: 'text', glyph: 'leaf', life: 0.8, a: 1, drag: 1.5 }); },
   klingenhieb(fx, c) { fx.ent(0.3, (g, e, k) => { g.globalCompositeOperation = 'lighter'; g.strokeStyle = `rgba(255,255,255,${1 - k})`; g.lineWidth = 6 * (1 - k) + 1; g.lineCap = 'round'; const r = 52 * easeOut(k) + 10; g.beginPath(); g.moveTo(c.at.x - r, c.at.y - r * 0.7); g.lineTo(c.at.x + r, c.at.y + r * 0.7); g.stroke(); g.beginPath(); g.moveTo(c.at.x + r, c.at.y - r * 0.7); g.lineTo(c.at.x - r, c.at.y + r * 0.7); g.stroke(); }); fx.burst(c.at.x, c.at.y, { n: 16, pal: ['#ffffff', '#9cc0ff'], speed: 280, size: 5, life: 0.4, shape: 'spark' }); },
   erdbrocken(fx, c) { fx.burst(c.at.x, c.at.y, { n: 10, col: '#8a6a44', speed: 280, size: 9, life: 0.9, shape: 'rock', ay: 600, drag: 0.5 }); fx.smoke(c.at.x, c.feet.y - 6, 10, '#a08a66', 34, 1.2); fx.ring(c.feet.x, c.feet.y, '#c9a06e', 120, 0.5, 6, 0.3); fx.sc.shake(8); },
   funkenschuss(fx, c) { fx.burst(c.at.x, c.at.y, { n: 12, pal: ['#ffffff', '#ffe07a', '#ffb43a'], speed: 220, size: 5, life: 0.4, shape: 'spark' }); fx.light(c.at.x, c.at.y, 90, '#ffe07a', 0.25, 0.6); },
   blitz(fx, c) { fx.burst(c.at.x, c.at.y, { n: 30, pal: ['#ffffff', '#fff08a', '#ffd23f'], speed: 380, size: 7, life: 0.5, shape: 'spark' }); fx.ring(c.feet.x, c.feet.y, '#ffe14d', 120, 0.5, 7, 0.3); fx.sc.flash('#fffbe0', 0.25); },
   schlangenbiss(fx, c) { fx.burst(c.at.x, c.at.y, { n: 24, pal: POISON, speed: 240, size: 9, life: 0.7, ay: 120 }); fx.ring(c.at.x, c.at.y, '#7dff6b', 90, 0.45); },
-  giftwolke(fx, c) { for (let k = 0; k < 24; k++) fx.p({ x: c.feet.x + rnd(-1, 1) * c.pos.s * 0.9, y: c.feet.y - rnd(0, 1.6) * c.pos.s, vx: rnd(-20, 20), vy: rnd(-25, 5), size: rnd(18, 30), size1: rnd(34, 50), life: rnd(1.3, 2.0), col: pick(['#8dff4d', '#5fcf2b', '#b86bff']), shape: 'soft', a: 0.5 }); for (let k = 0; k < 4; k++) fx.p({ x: c.at.x + rnd(-30, 30), y: c.at.y, vy: rnd(-50, -20), size: 18, col: '#c8ffa0', shape: 'text', glyph: '☠', life: 1.2, a: 0.9 }); fx.light(c.at.x, c.at.y, 160, '#8dff4d', 0.6, 0.45); },
+  giftwolke(fx, c) { for (let k = 0; k < 24; k++) fx.p({ x: c.feet.x + rnd(-1, 1) * c.pos.s * 0.9, y: c.feet.y - rnd(0, 1.6) * c.pos.s, vx: rnd(-20, 20), vy: rnd(-25, 5), size: rnd(18, 30), size1: rnd(34, 50), life: rnd(1.3, 2.0), col: pick(['#8dff4d', '#5fcf2b', '#b86bff']), shape: 'soft', a: 0.5 }); for (let k = 0; k < 4; k++) fx.p({ x: c.at.x + rnd(-30, 30), y: c.at.y, vy: rnd(-50, -20), size: 18, col: '#c8ffa0', shape: 'text', glyph: 'skull', life: 1.2, a: 0.9 }); fx.light(c.at.x, c.at.y, 160, '#8dff4d', 0.6, 0.45); },
   lichtkreuz(fx, c) { fx.ent(0.45, (g, e, k) => { g.globalCompositeOperation = 'lighter'; g.fillStyle = `rgba(255,248,200,${(1 - k) * 0.9})`; const L = 80 * easeOut(k) + 20, w = 10 * (1 - k) + 2; g.fillRect(c.at.x - w / 2, c.at.y - L, w, L * 2); g.fillRect(c.at.x - L * 0.7, c.at.y - w / 2, L * 1.4, w); }); fx.burst(c.at.x, c.at.y, { n: 18, pal: GOLD, speed: 220, size: 8, life: 0.7, shape: 'star4' }); fx.light(c.at.x, c.at.y, 190, '#fff2a8', 0.45, 0.8); },
   eisstoss(fx, c) { for (let k = 0; k < 7; k++) fx.later(k * 30, () => fx.p({ x: c.feet.x + (k - 3) * c.pos.s * 0.28 + rnd(-6, 6), y: c.feet.y + rnd(-4, 4), size: c.pos.s * rnd(0.9, 1.6), life: 1.1, shape: 'crystal', rot: rnd(-0.3, 0.3), a: 1, a1: 0.9, layer: 1 })); fx.burst(c.at.x, c.at.y, { n: 20, pal: ICE, speed: 240, size: 8, life: 0.6, shape: 'shard' }); fx.ring(c.feet.x, c.feet.y, '#8fe3ff', 120, 0.5, 6, 0.3); fx.light(c.at.x, c.at.y, 170, '#7fd8ff', 0.5, 0.7); },
   zeitsand(fx, c) { fx.ent(1.3, (g, e, k) => { const a = Math.sin(k * Math.PI), R = c.pos.s * 1.0; g.translate(c.feet.x, c.feet.y - c.pos.s * 0.2); g.scale(1, 0.35); g.globalCompositeOperation = 'lighter'; g.strokeStyle = `rgba(255,207,107,${a})`; g.lineWidth = 4; g.beginPath(); g.arc(0, 0, R, 0, TAU); g.stroke(); g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(k * 14) * R * 0.8, Math.sin(k * 14) * R * 0.8); g.moveTo(0, 0); g.lineTo(Math.cos(k * 3) * R * 0.5, Math.sin(k * 3) * R * 0.5); g.stroke(); }, 0); fx.burst(c.at.x, c.at.y - 40, { n: 24, pal: GOLD, speed: 70, size: 5, life: 1.0, ay: 200 }); fx.light(c.at.x, c.at.y, 150, '#ffcf6b', 0.5, 0.6); },

@@ -8,10 +8,12 @@ import { drawSpellIcon, clamp } from './gfx.js';
 import { sfx, music } from './audio.js';
 import { CFG } from './sim.js';
 import { LocalSource, NetSource } from './net.js';
-import { icoHTML } from './icons.js';
+import { icoHTML, ico } from './icons.js';
 import { FLOORS, MODS, towerOpts } from './tower.js';
 
-const EMOTES = ['👍', '😂', '😮', '😡', '👏', '🔥'];
+const EMOTES = ['thumb', 'laugh', 'wow', 'angry', 'heart', 'flame'];
+const EMOTE_COL = { thumb: '#ffd36a', laugh: '#ffd36a', wow: '#8fd0ff', angry: '#ff6a6a', heart: '#ff6fa5', flame: '#ff9a3a' };
+const tagBot = (el, name, bot) => { el.textContent = name; if (bot) { const t = document.createElement('i'); t.className = 'bot-tag'; t.append(ico('bot')); el.append(' ', t); } };
 const STATUS_ICONS = { burn: 'flame', poison: 'skull', chill: 'snow', stun: 'star', reflect: 'mirror', phase: 'ghost', haste: 'bolt', curse: 'curse', regen: 'leaf', phoenix: 'sparkle' };
 const FIZZLE = { acc: 'Zu ungenau', gcd: 'Noch nicht bereit', cd: 'Noch nicht bereit', mana: 'Zu wenig Mana', stun: 'Betäubt!', deck: 'Nicht im Deck', over: '' };
 const TIPS = ['Tipp: Tippe auf ein Symbol in der Leiste, um dir die Form einblenden zu lassen.', 'Tipp: Du darfst mitten im Kampf jederzeit zeichnen – es gibt keine Runden.', 'Tipp: Schilde und Heilung vor einem großen Zauber aufbauen.', 'Tipp: Seltene Zauber brauchen eine sauberere Form – lieber langsam und deutlich zeichnen.', 'Tipp: Findet sich kein Gegner, kämpfst du nach kurzer Zeit gegen einen Bot.', 'Tipp: Mana regeneriert sich ständig – spare es nicht für ewig.'];
@@ -118,15 +120,15 @@ export class Battle {
 
   surrender(btn) {
     if (this.phase !== 'play' && this.phase !== 'count') return;
-    if (!btn.classList.contains('arm')) { btn.classList.add('arm'); btn.textContent = 'Aufgeben?'; setTimeout(() => { btn.classList.remove('arm'); btn.textContent = '🏳'; }, 2500); sfx.click(); return; }
-    btn.classList.remove('arm'); btn.textContent = '🏳';
+    if (!btn.classList.contains('arm')) { btn.classList.add('arm'); btn.textContent = 'Aufgeben?'; setTimeout(() => { btn.classList.remove('arm'); btn.innerHTML = icoHTML('flag'); }, 2500); sfx.click(); return; }
+    btn.classList.remove('arm'); btn.innerHTML = icoHTML('flag');
     this.src.quit();
   }
 
   buildEmotes() {
     this.el.emotes.innerHTML = '';
     EMOTES.forEach((g, n) => {
-      const b = document.createElement('button'); b.textContent = g;
+      const b = document.createElement('button'); b.innerHTML = icoHTML(g); b.style.color = EMOTE_COL[g]; b.setAttribute('aria-label', g);
       b.onclick = () => { if (this.phase !== 'play' && this.phase !== 'count') return; this.src.emote(n); this.el.emotes.hidden = true; };
       this.el.emotes.appendChild(b);
     });
@@ -152,7 +154,7 @@ export class Battle {
       case 'go': this.onGo(); break;
       case 'snap': this.onSnap(m.s); break;
       case 'ev': for (const e of m.ev) this.onEvent(e); break;
-      case 'emote': { const P = this.scene.pl[m.p]; if (P) { P.emote = { glyph: EMOTES[m.n] || '👍', t: 2.4 }; sfx.emote(); } break; }
+      case 'emote': { const P = this.scene.pl[m.p]; if (P) { P.emote = { glyph: EMOTES[m.n] || 'thumb', t: 2.4 }; sfx.emote(); } break; }
       case 'end': this.onEnd(m); break;
       case 'disconnected': if (this.phase === 'play' || this.phase === 'count') this.onEnd({ winner: 1 - this.you, reason: 'disconnect', stats: [], time: Math.round(this.matchT) }); else if (this.phase === 'queue') { this.msg({ t: 'offline', why: 'Verbindung getrennt' }); } break;
       default: break;
@@ -166,9 +168,9 @@ export class Battle {
     this.st = [this.blank(), this.blank()];
     const me = m.players[m.you], foe = m.players[1 - m.you];
     drawAvatar(this.el.me.querySelector('.b-av'), me.skin, 56); drawAvatar(this.el.foe.querySelector('.b-av'), foe.skin, 56);
-    this.el.me.querySelector('.b-name').textContent = me.name; this.el.foe.querySelector('.b-name').textContent = foe.name + (foe.bot ? ' 🤖' : '');
+    tagBot(this.el.me.querySelector('.b-name'), me.name, false); tagBot(this.el.foe.querySelector('.b-name'), foe.name, foe.bot);
     const vp = this.el.count.querySelectorAll('.b-vp');
-    [me, foe].forEach((p, k) => { drawAvatar(vp[k].querySelector('canvas'), p.skin, 96); vp[k].querySelector('b').textContent = p.name + (p.bot ? ' 🤖' : ''); vp[k].querySelector('small').textContent = `🏆 ${p.trophies}`; });
+    [me, foe].forEach((p, k) => { drawAvatar(vp[k].querySelector('canvas'), p.skin, 96); tagBot(vp[k].querySelector('b'), p.name, p.bot); const sm = vp[k].querySelector('small'); sm.textContent = ''; sm.append(ico('trophy'), ' ' + p.trophies); });
     this.buildDeck(me.deck, m.levels[m.you]);
     this.el.count.hidden = false;
     if (m.floor && !this.hooks.noRuleBanner) { const md = MODS[m.floor.mod] || MODS.none; this.coach(`<b>Etage ${m.floor.n} · ${m.floor.name}</b><br>Regel: <b>${md.name}</b> – ${md.desc}`); clearTimeout(this._rb); this._rb = setTimeout(() => { if (this.mode === 'tower') this.coach(null); }, 6500); }
@@ -410,11 +412,12 @@ export class Battle {
     for (const id of this.deckIds) {
       const o = this.slots[id], sp = SPELL_BY_ID[id];
       const cd = me.cds[id] || 0, g = me.gcd, rem = Math.max(cd, g);
-      const frac = clamp(Math.max(cd / (sp.cd * this.cdMul()), g / CFG.gcd));
+      let frac = clamp(Math.max(cd / (sp.cd * this.cdMul()), g / CFG.gcd));
+      if (rem <= CFG.tol || frac < 0.012) frac = 0;
       const ready = playing && rem <= CFG.tol && me.mana >= sp.cost && me.stun <= 0;
       const key = `${frac.toFixed(2)}|${ready}|${me.mana >= sp.cost}|${cd > g ? Math.ceil(cd) : 0}`;
       if (o.last === key) continue; o.last = key;
-      o.cdo.style.setProperty('--f', frac.toFixed(3));
+      o.cdo.style.setProperty('--f', frac.toFixed(3)); o.cdo.hidden = frac <= 0;
       o.cdt.textContent = cd > g + 0.2 && cd > 0.3 ? cd.toFixed(cd < 10 ? 1 : 0) : '';
       o.b.classList.toggle('ready', ready);
       o.b.classList.toggle('nomana', me.mana < sp.cost);

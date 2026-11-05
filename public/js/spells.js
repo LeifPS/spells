@@ -84,26 +84,26 @@ export function powerFactor(acc, thr) {
 export function describeParts(sp, lvl = 1) {
   const f = sp.fx, m = levelMul(lvl), r = (v) => Math.round(v * m);
   const out = [];
-  if (f.dmg) out.push({ i: '⚔', t: f.hits > 1 ? `${r(f.dmg)} × ${f.hits} Schaden` : `${r(f.dmg)} Schaden` });
-  if (f.burn) out.push({ i: '🔥', t: `Brennen ${r(f.burn[0])}/s · ${f.burn[1]} s` });
-  if (f.poison) out.push({ i: '☠', t: `Gift ${r(f.poison[0])}/s · ${f.poison[1]} s` });
-  if (f.chill) out.push({ i: '❄', t: `Frost ${f.chill} s (langsamer, weniger Mana)` });
-  if (f.stun) out.push({ i: '💫', t: `Betäubt ${f.stun} s` });
-  if (f.gcdHit) out.push({ i: '💨', t: `Gegner wartet +${f.gcdHit} s` });
-  if (f.shieldBreak) out.push({ i: '🕳', t: 'Zerstört Schilde' });
-  if (f.drain) out.push({ i: '🩸', t: `Lebensraub ${Math.round(f.drain * 100)}%` });
-  if (f.heal) out.push({ i: '❤', t: `Heilt ${r(f.heal)}` });
-  if (f.shield) out.push({ i: '🛡', t: `Schild ${r(f.shield[0])} · ${f.shield[1]} s` });
-  if (f.mana) out.push({ i: '💧', t: `+${f.mana} Mana` });
-  if (f.cleanse) out.push({ i: '✨', t: 'Entfernt Brennen, Gift, Frost, Betäubung' });
-  if (f.reflect) out.push({ i: '🪞', t: `Reflektiert den nächsten Angriff (${f.reflect} s)` });
-  if (f.phase) out.push({ i: '👻', t: `Weicht aus (${f.phase} s)` });
-  if (f.haste) out.push({ i: '⚡', t: `Hast ${f.haste} s` });
-  if (f.pierce) out.push({ i: '🎯', t: 'Unblockbar' });
-  if (f.curse) out.push({ i: '🔮', t: `Fluch ${f.curse} s (+30 % Schaden)` });
-  if (f.regen) out.push({ i: '🌿', t: `Heilt ${r(f.regen[0])}/s · ${f.regen[1]} s` });
-  if (f.phoenix) out.push({ i: '☄', t: `Wiederauferstehung mit ${Math.round(f.phoenix[1] * 100)} % Leben (${f.phoenix[0]} s bereit)` });
-  if (f.gamble) out.push({ i: '✨', t: 'Zufall: Schaden, Heilung, Schild, Mana, Betäubung oder Brand' });
+  if (f.dmg) out.push({ i: 'sword', t: f.hits > 1 ? `${r(f.dmg)} × ${f.hits} Schaden` : `${r(f.dmg)} Schaden` });
+  if (f.burn) out.push({ i: 'flame', t: `Brennen ${r(f.burn[0])}/s · ${f.burn[1]} s` });
+  if (f.poison) out.push({ i: 'skull', t: `Gift ${r(f.poison[0])}/s · ${f.poison[1]} s` });
+  if (f.chill) out.push({ i: 'snow', t: `Frost ${f.chill} s (langsamer, weniger Mana)` });
+  if (f.stun) out.push({ i: 'star', t: `Betäubt ${f.stun} s` });
+  if (f.gcdHit) out.push({ i: 'wind', t: `Gegner wartet +${f.gcdHit} s` });
+  if (f.shieldBreak) out.push({ i: 'crack', t: 'Zerstört Schilde' });
+  if (f.drain) out.push({ i: 'drop', t: `Lebensraub ${Math.round(f.drain * 100)}%` });
+  if (f.heal) out.push({ i: 'heart', t: `Heilt ${r(f.heal)}` });
+  if (f.shield) out.push({ i: 'shield', t: `Schild ${r(f.shield[0])} · ${f.shield[1]} s` });
+  if (f.mana) out.push({ i: 'drop', t: `+${f.mana} Mana` });
+  if (f.cleanse) out.push({ i: 'sparkle', t: 'Entfernt Brennen, Gift, Frost, Betäubung' });
+  if (f.reflect) out.push({ i: 'mirror', t: `Reflektiert den nächsten Angriff (${f.reflect} s)` });
+  if (f.phase) out.push({ i: 'ghost', t: `Weicht aus (${f.phase} s)` });
+  if (f.haste) out.push({ i: 'bolt', t: `Hast ${f.haste} s` });
+  if (f.pierce) out.push({ i: 'target', t: 'Unblockbar' });
+  if (f.curse) out.push({ i: 'curse', t: `Fluch ${f.curse} s (+30 % Schaden)` });
+  if (f.regen) out.push({ i: 'leaf', t: `Heilt ${r(f.regen[0])}/s · ${f.regen[1]} s` });
+  if (f.phoenix) out.push({ i: 'flame', t: `Wiederauferstehung mit ${Math.round(f.phoenix[1] * 100)} % Leben (${f.phoenix[0]} s bereit)` });
+  if (f.gamble) out.push({ i: 'sparkle', t: 'Zufall: Schaden, Heilung, Schild, Mana, Betäubung oder Brand' });
   return out;
 }
 
@@ -115,4 +115,4 @@ export const roleOf = (sp) => {
   if (f.heal || f.regen) return 'heal';
   return 'utility';
 };
-export const ROLE_ICON = { attack: '⚔', defense: '🛡', heal: '❤', utility: '💧' };
+export const ROLE_ICON = { attack: 'sword', defense: 'shield', heal: 'heart', utility: 'drop' };

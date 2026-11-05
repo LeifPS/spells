@@ -6,7 +6,7 @@ import { renderBackground, drawWizardArt, drawAvatar, THEME_NAMES } from './scen
 import { BOT_LEVELS } from './bot.js';
 import { FLOORS, MODS, towerOpts } from './tower.js';
 import { sfx, music, audio, unlock } from './audio.js';
-import { ico, rich, emojiIco, rankBadge } from './icons.js';
+import { ico, rich, nameIco, rankBadge } from './icons.js';
 
 // ------------------------------------------------------------ kleine DOM-Helfer
 export function h(tag, props = {}, ...kids) {
@@ -169,7 +169,7 @@ export class App {
   }
   dailyQuestPeek() {
     const qs = this.store.d.quests.list;
-    return h('div', { class: 'peek pn', onclick: () => this.show('quests') }, h('b', {}, ico('scroll'), 'Tagesaufgaben'), ...qs.map((q) => h('div', { class: 'pq' + (q.claimed ? ' done' : '') }, h('span', {}, q.text), h('em', {}, q.claimed ? '✓' : `${Math.min(q.prog, q.goal)}/${q.goal}`))));
+    return h('div', { class: 'peek pn', onclick: () => this.show('quests') }, h('b', {}, ico('scroll'), 'Tagesaufgaben'), ...qs.map((q) => h('div', { class: 'pq' + (q.claimed ? ' done' : '') }, h('span', {}, q.text), h('em', {}, q.claimed ? ico('check') : `${Math.min(q.prog, q.goal)}/${q.goal}`))));
   }
   fight(btn) {
     unlock();
@@ -283,10 +283,10 @@ export class App {
   detail(id) {
     const st = this.store, sp = SPELL_BY_ID[id], own = st.owned(id), lv = Math.max(1, st.spellLevel(id)), R = RARITIES[sp.rarity];
     const stars = RARITY_ORDER.indexOf(sp.rarity) + 1;
-    const parts = describeParts(sp, lv).map((p) => h('li', {}, emojiIco(p.i), p.t));
+    const parts = describeParts(sp, lv).map((p) => h('li', {}, nameIco(p.i), p.t));
     const nx = st.nextCopies(id), c = st.copies(id);
     const body = h('div', { class: 'det', style: `--c:${R.color};--g:${sp.color}` },
-      h('div', { class: 'dt' }, h('div', { class: 'big pn' }, icon(sp, 200)), h('div', { class: 'dn' }, h('small', { style: `color:${R.color}` }, rarName(sp.rarity).toUpperCase() + ' · ', emojiIco(ROLE_ICON[roleOf(sp)])), h('h3', {}, sp.name), h('div', { class: 'diff' }, 'Schwierigkeit ', h('b', {}, h('span', {}, '★'.repeat(stars)), h('span', { style: 'opacity:.25' }, '★'.repeat(5 - stars))), h('small', {}, `Genauigkeit ab ${Math.round(spellThr(sp) * 100)} %`)))),
+      h('div', { class: 'dt' }, h('div', { class: 'big pn' }, icon(sp, 200)), h('div', { class: 'dn' }, h('small', { style: `color:${R.color}` }, rarName(sp.rarity).toUpperCase() + ' · ', nameIco(ROLE_ICON[roleOf(sp)])), h('h3', {}, sp.name), h('div', { class: 'diff' }, 'Schwierigkeit ', h('b', {}, h('span', { class: 'stars' }, ...Array.from({ length: 5 }, (_, k) => ico('star', k < stars ? '' : 'dim')))), h('small', {}, `Genauigkeit ab ${Math.round(spellThr(sp) * 100)} %`)))),
       h('p', { class: 'lore' }, sp.lore),
       h('div', { class: 'stats3' }, h('div', { class: 'pn' }, h('b', {}, ico('drop'), sp.cost), h('small', {}, 'Mana')), h('div', { class: 'pn' }, h('b', {}, ico('clock'), `${sp.cd} s`), h('small', {}, 'Abklingzeit')), h('div', { class: 'pn' }, h('b', {}, ico('wind'), sp.travel == null ? 'sofort' : `${sp.travel} s`), h('small', {}, 'Flugzeit'))),
       h('ul', { class: 'parts' }, ...parts),

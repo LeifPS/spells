@@ -1,4 +1,5 @@
 // Kampf-Szene: Hintergründe (4 Themen), Arena-Boden, Zauberer mit Animationen, Status-Overlays.
+import { drawIcon } from './icons.js';
 import { TAU, clamp, lerp, rnd, pick, easeOut, hexRgb, rgba, mix, lighten, darken, seeded, glowSprite, softSprite, glow, fitCanvas } from './gfx.js';
 
 // ------------------------------------------------------------------ Themen
@@ -542,7 +543,7 @@ export class Scene {
       const bw = 0.95 * s, bh = 0.8 * s;
       g.beginPath(); g.roundRect(-bw / 2, -bh / 2, bw, bh, bh * 0.3); g.fill(); g.stroke();
       g.beginPath(); g.moveTo(-0.1 * s, bh / 2 - 1); g.lineTo(0, bh / 2 + 0.18 * s); g.lineTo(0.12 * s, bh / 2 - 1); g.fill();
-      g.font = `${Math.round(0.55 * s)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#000'; g.fillText(e.glyph, 0, 0);
+      drawIcon(g, e.glyph, 0, 0, 0.58 * s, { thumb: '#d68a00', laugh: '#d68a00', wow: '#2a78c8', angry: '#d62a2a', heart: '#e0457f', flame: '#e06a10' }[e.glyph] || '#333', { lw: 2.1 });
       g.restore();
     }
   }

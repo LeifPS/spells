@@ -49,6 +49,17 @@ const P = {
   crack: '<path d="M13 2.500l-3 6.500 4 3-4.500 4 3.500 5.500"/><path d="M5 12h3M17 10h3"/>',
   curse: '<path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor" fill-opacity=".2"/>',
   leaf: '<path d="M5 19C5 10 10 5 20 4c0 10-5 15-14 15zM5 19l8-8"/>',
+  // Emotes & Zeichen (selbst gezeichnet)
+  thumb: '<path d="M7 11v9H4v-9z" fill="currentColor" fill-opacity=".25"/><path d="M7 11l4-7c1.600 0 2.700 1.100 2.400 2.700L12.800 10H19a1.800 1.800 0 0 1 1.700 2.200l-1.500 6.500A2 2 0 0 1 17.300 20H7"/>',
+  laugh: '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".2"/><path d="M7.200 10.200q1.600-2.200 3.200 0M13.600 10.200q1.600-2.200 3.200 0M7 13.500h10a5 5 0 0 1-10 0z" fill="currentColor" fill-opacity=".35"/>',
+  wow: '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".2"/><path d="M8.600 9.500v1M15.400 9.500v1M7 7.500l2.200-1M17 7.500l-2.200-1"/><ellipse cx="12" cy="15.800" rx="2" ry="2.700" fill="currentColor" fill-opacity=".35"/>',
+  angry: '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".2"/><path d="M6.800 8.200l3.800 1.800M17.200 8.200L13.400 10M9 11.800v.5M15 11.800v.5M8.500 17c2-2 5-2 7 0"/>',
+  quest: '<path d="M8.500 8.800a3.500 3.500 0 1 1 5.400 2.900c-1.200.8-1.900 1.500-1.900 3M12 18.800v.4"/>',
+  exclam: '<path d="M12 4.500v9M12 18.600v.4"/>',
+  clover: '<circle cx="9" cy="9" r="3.600" fill="currentColor" fill-opacity=".3"/><circle cx="15" cy="9" r="3.600" fill="currentColor" fill-opacity=".3"/><circle cx="9" cy="14.500" r="3.600" fill="currentColor" fill-opacity=".3"/><circle cx="15" cy="14.500" r="3.600" fill="currentColor" fill-opacity=".3"/><path d="M12 12l4 8"/>',
+  flower: '<circle cx="12" cy="6.500" r="3" fill="currentColor" fill-opacity=".3"/><circle cx="17.200" cy="10.300" r="3" fill="currentColor" fill-opacity=".3"/><circle cx="15.200" cy="16.400" r="3" fill="currentColor" fill-opacity=".3"/><circle cx="8.800" cy="16.400" r="3" fill="currentColor" fill-opacity=".3"/><circle cx="6.800" cy="10.300" r="3" fill="currentColor" fill-opacity=".3"/><circle cx="12" cy="12" r="1.600" fill="currentColor"/>',
+  bot: '<rect x="5" y="8" width="14" height="11" rx="3" fill="currentColor" fill-opacity=".2"/><path d="M12 8V5M9.500 13v1M14.500 13v1M9.500 16.500h5"/><circle cx="12" cy="4" r="1.200" fill="currentColor"/>',
+  ring: '<circle cx="12" cy="12" r="8"/>',
 };
 
 const GRADIENTS = '<defs><linearGradient id="gCoin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a0"/><stop offset=".45" stop-color="#ffc93a"/><stop offset="1" stop-color="#d9800f"/></linearGradient></defs>';
@@ -74,9 +85,38 @@ export function rich(str) {
   String(str).split(/(\{[a-z]+\})/).forEach((part) => { const m = part.match(/^\{([a-z]+)\}$/); if (m && P[m[1]]) f.append(ico(m[1])); else if (part) f.append(document.createTextNode(part)); });
   return f;
 }
-// Emoji aus der Zauberbeschreibung -> Icon-Name
-export const EMOJI_ICON = { '⚔': 'sword', '🔥': 'flame', '☠': 'skull', '❄': 'snow', '💫': 'star', '💨': 'wind', '🕳': 'crack', '🩸': 'drop', '❤': 'heart', '🛡': 'shield', '💧': 'drop', '✨': 'sparkle', '🪞': 'mirror', '👻': 'ghost', '⚡': 'bolt', '🎯': 'target', '🌿': 'leaf', '🔮': 'curse', '☄': 'flame' };
-export function emojiIco(e) { const n = EMOJI_ICON[e.replace(/️/g, '')]; return n ? ico(n, 'e-' + n) : document.createTextNode(e); }
+// Icon-Name -> DOM-Icon (Zauberbeschreibung); unbekannte Namen werden ignoriert
+export function nameIco(n) { return P[n] ? ico(n, 'e-' + n) : document.createTextNode(''); }
+
+// Dieselben Zeichnungen auf dem Canvas (Effekte, Sprechblasen): drawIcon(g, 'heart', x, y, size, '#ff6fa5')
+const cache = {};
+function parts(name) {
+  if (cache[name]) return cache[name];
+  const out = [], src = P[name] || '', re = /<(path|circle|ellipse|rect)\b([^>]*)>/g; let m;
+  const at = (a, k) => { const r = a.match(new RegExp('(?:^|\\s)' + k + '="([^"]*)"')); return r ? r[1] : null; };
+  while ((m = re.exec(src))) {
+    const a = m[2], p = new Path2D(), n = (k, d = 0) => (at(a, k) == null ? d : parseFloat(at(a, k)));
+    if (m[1] === 'path') p.addPath ? p.addPath(new Path2D(at(a, 'd'))) : 0;
+    else if (m[1] === 'circle') p.arc(n('cx'), n('cy'), n('r'), 0, Math.PI * 2);
+    else if (m[1] === 'ellipse') p.ellipse(n('cx'), n('cy'), n('rx'), n('ry'), 0, 0, Math.PI * 2);
+    else p.roundRect ? p.roundRect(n('x'), n('y'), n('width'), n('height'), n('rx')) : p.rect(n('x'), n('y'), n('width'), n('height'));
+    const fill = at(a, 'fill'); out.push({ p, fill: fill && fill !== 'none' ? (fill.indexOf('url(') === 0 ? 'cur' : fill === 'currentColor' ? 'cur' : fill) : null, fo: at(a, 'fill-opacity') == null ? 1 : parseFloat(at(a, 'fill-opacity')), noStroke: at(a, 'stroke') === 'none' });
+  }
+  return (cache[name] = out);
+}
+export function drawIcon(g, name, x, y, size, color = '#fff', o = {}) {
+  const ps = parts(name); if (!ps.length) return;
+  g.save(); g.translate(x - size / 2, y - size / 2); g.scale(size / 24, size / 24);
+  g.lineWidth = o.lw || 1.9; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = color;
+  if (o.shadow) { g.shadowColor = o.shadow; g.shadowBlur = o.blur || 8; }
+  const base = g.globalAlpha;
+  for (const q of ps) {
+    if (q.fill) { g.fillStyle = q.fill === 'cur' ? color : q.fill; g.globalAlpha = base * (o.solid ? Math.max(q.fo, 0.6) : q.fo); g.fill(q.p); g.globalAlpha = base; }
+    if (!q.noStroke) g.stroke(q.p);
+  }
+  g.restore();
+}
+export const hasIcon = (n) => !!P[n];
 
 // Rang-Wappen: Schild mit n Winkeln
 export function rankBadge(idx, color, size = 44) {
@@ -87,3 +127,4 @@ export function rankBadge(idx, color, size = 44) {
   return d;
 }
 export const ICON_NAMES = Object.keys(P);
+
