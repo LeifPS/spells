@@ -72,6 +72,7 @@ export class App {
     battle.hooks.onStart = (m, b) => { if (b.mode === 'tutorial') this.tutStart(b); };
     battle.hooks.onEvent = (e, b) => { if (b.mode === 'tutorial') this.tutEvent(e, b); };
     battle.hooks.toast = (t) => this.toast(t);
+    battle.hooks.settings = () => this.store.d.settings;
     this.build();
     store.onChange(() => this.refreshHeader());
     this.applyAudio();

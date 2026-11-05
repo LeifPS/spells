@@ -12,6 +12,7 @@ import { LocalSource, NetSource } from './net.js';
 const EMOTES = ['👍', '😂', '😮', '😡', '👏', '🔥'];
 const STATUS_ICONS = { burn: '🔥', poison: '☠️', chill: '❄️', stun: '💫', reflect: '🪞', phase: '👻', haste: '⚡' };
 const FIZZLE = { acc: 'Zu ungenau', gcd: 'Noch nicht bereit', cd: 'Noch nicht bereit', mana: 'Zu wenig Mana', stun: 'Betäubt!', deck: 'Nicht im Deck', over: '' };
+const TIPS = ['Tipp: Tippe auf ein Symbol in der Leiste, um dir die Form einblenden zu lassen.', 'Tipp: Du darfst mitten im Kampf jederzeit zeichnen – es gibt keine Runden.', 'Tipp: Schilde und Heilung vor einem großen Zauber aufbauen.', 'Tipp: Seltene Zauber brauchen eine sauberere Form – lieber langsam und deutlich zeichnen.', 'Tipp: Findet sich kein Gegner, kämpfst du nach kurzer Zeit gegen einen Bot.', 'Tipp: Mana regeneriert sich ständig – spare es nicht für ewig.'];
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 export class Battle {
@@ -27,19 +28,20 @@ export class Battle {
     <div class="b-side foe"><div class="b-info"><div class="b-name"></div><div class="b-hp"><i class="g"></i><i class="f"></i><i class="sh"></i><b></b></div><div class="b-mn"><i></i></div><div class="b-st"></div></div><canvas class="b-av" width="56" height="56"></canvas></div>
   </div>
   <div class="b-coach" hidden></div>
+  <div class="b-hint">Zeichne irgendwo auf dem Bildschirm</div>
   <div class="b-callout"></div>
   <div class="b-hurt"></div>
   <div class="b-tools"><button class="b-btn b-emo" aria-label="Emotes">😊</button><button class="b-btn b-quit" aria-label="Aufgeben">🏳</button></div>
   <div class="b-emotes" hidden></div>
-  <div class="b-over b-queue" hidden><div class="b-card"><div class="b-spin"></div><h2>Suche Gegner …</h2><p class="b-qs">Verbinde …</p><p class="b-qt"></p><button class="b-big ghost b-qcancel">Abbrechen</button></div></div>
+  <div class="b-over b-queue" hidden><div class="b-card"><div class="b-spin"></div><h2>Suche Gegner …</h2><p class="b-qs">Verbinde …</p><p class="b-qt"></p><p class="b-tip"></p><button class="b-big ghost b-qcancel">Abbrechen</button></div></div>
   <div class="b-over b-count" hidden><div class="b-vs"><div class="b-vp"><canvas width="96" height="96"></canvas><b></b><small></small></div><div class="b-vsx">VS</div><div class="b-vp"><canvas width="96" height="96"></canvas><b></b><small></small></div></div><div class="b-cdn">3</div></div>
   <div class="b-over b-result" hidden><div class="b-card res"><h1></h1><p class="b-why"></p><div class="b-stats"></div><div class="b-extra"></div><div class="b-rbtns"></div></div></div>
 </div>
 <div class="b-panel">
   <div class="b-deck"></div>
   <div class="b-manar"><div class="b-mbar"><i class="pre"></i><i class="fill"></i><b></b><span>💧</span></div></div>
-  <div class="b-padw"><canvas class="b-pad"></canvas><div class="b-hint">Zeichne einen Zauber</div></div>
-</div>`;
+</div>
+<canvas class="b-pad"></canvas>`;
     const q = (s) => root.querySelector(s);
     this.el = {
       scene: q('.b-scene'), pad: q('.b-pad'), deck: q('.b-deck'), timer: q('.b-timer'), sd: q('.b-sd'), callout: q('.b-callout'), hurt: q('.b-hurt'),
@@ -47,7 +49,7 @@ export class Battle {
     };
     this.scene = new Scene(this.el.scene);
     this.fx = new FX(this.scene);
-    this.pad = new DrawPad(this.el.pad, { onStroke: (pts) => this.onStroke(pts), onStart: () => { this.el.hint.classList.add('hide'); } });
+    this.pad = new DrawPad(this.el.pad, { onStroke: (pts) => this.onStroke(pts), onStart: () => { this.el.hint.classList.add('hide'); }, target: () => this.padTarget() });
     this.pad.enabled = false;
     this.pad.run();
     this.buildEmotes();
@@ -68,7 +70,7 @@ export class Battle {
 
   // ------------------------------------------------------------ Anzeigen / Steuerung
   show() { this.root.hidden = false; this.scene.resize(); this.pad.resize(); if (!this.raf) { this.last = performance.now(); const loop = (now) => { const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.tick(dt); this.raf = requestAnimationFrame(loop); }; this.raf = requestAnimationFrame(loop); } }
-  hide() { this.root.hidden = true; if (this.raf) cancelAnimationFrame(this.raf); this.raf = null; }
+  hide() { this.wake(false); this.root.hidden = true; if (this.raf) cancelAnimationFrame(this.raf); this.raf = null; }
 
   /** mode: 'online' | 'train' ; profile: {pid,name,trophies,deck,levels,skin} */
   play(profile, { mode = 'online', level = 1, theme = null, noBot = false, ghost = null } = {}) {
@@ -76,6 +78,7 @@ export class Battle {
     if (this.src) this.src.close();
     this.show();
     this.resetUi();
+    this.applySettings(this.hooks.settings ? this.hooks.settings() : null); this.wake(true);
     music.start('menu');
     if (mode === 'online') {
       this.phase = 'queue'; this.queueT = 0;
@@ -211,7 +214,7 @@ export class Battle {
       case 'fizzle': if (e.p === me) { const t = FIZZLE[e.why]; if (t) this.pad.say(t, '#ff8a8a'); sfx.fizzle(); this.opt = {}; } break;
       case 'hit': {
         this.setHp(e.p, e.hp); this.st[e.p].shield = e.shield; fx.hit(e);
-        if (e.p === me && e.amount > 0) this.hurtFlash(e.amount);
+        if (e.p === me && e.amount > 0) { this.hurtFlash(e.amount); this.buzz(e.amount >= 30 ? [40, 30, 40] : 18); }
         break;
       }
       case 'dot': this.setHp(e.p, e.hp); this.st[e.p].shield = e.shield; fx.dot(e); break;
@@ -243,6 +246,14 @@ export class Battle {
   }
 
   // ------------------------------------------------------------ Eingabe / Erkennung
+  padTarget() {
+    const tip = this.scene.tip(this.you), a = this.el.scene.getBoundingClientRect(), b = this.el.pad.getBoundingClientRect();
+    return { x: a.left - b.left + tip.x, y: a.top - b.top + tip.y };
+  }
+  buzz(p) { try { const s = this.hooks.settings ? this.hooks.settings() : null; if (s && s.vibe === false) return; if (navigator.vibrate) navigator.vibrate(p); } catch {} }
+  applySettings(s) { if (!s) return; this.low = !!s.fxLow; this.pad.low = this.low; this.fx.max = this.low ? 380 : 900; this.scene.shakeScale = this.low ? 0.4 : 1; }
+  async wake(on) { try { if (on && navigator.wakeLock && !this._wl) { this._wl = await navigator.wakeLock.request('screen'); this._wl.addEventListener('release', () => { this._wl = null; }); } else if (!on && this._wl) { this._wl.release(); this._wl = null; } } catch {} }
+
   deckSpecs() { return this.deckIds.map((id) => ({ id, shape: SPELL_BY_ID[id].shape, thr: spellThr(SPELL_BY_ID[id]) })); }
   otherSpecs() { return SPELLS.filter((s) => !this.deckIds.includes(s.id)).map((s) => ({ id: s.id, shape: s.shape, thr: spellThr(s) })); }
 
@@ -251,7 +262,7 @@ export class Battle {
     const r = recognize(pts, this.deckSpecs(), this.otherSpecs());
     if (!r.ok) {
       if (r.reason === 'short' || r.reason === 'empty') return { ok: null };
-      sfx.bad();
+      sfx.bad(); this.buzz([8, 40, 8]);
       if (r.reason === 'low') {
         const b = r.best, sp = SPELL_BY_ID[b.id], close = b.score >= b.thr - 0.12;
         this.pad.say('Nicht erkannt', '#ff9a9a', close ? `${sp.name}: ${Math.round(b.score * 100)} % (nötig ${Math.round(b.thr * 100)} %)` : '');
@@ -264,7 +275,7 @@ export class Battle {
     const sp = SPELL_BY_ID[r.id], s = this.st[this.you], tol = CFG.tol;
     const block = (t) => { this.pad.say(t, '#ff9a9a', sp.name); sfx.fizzle(); return { ok: false, color: '#ff7a7a' }; };
     if (s.stun > 0) return block('Betäubt!');
-    if (s.mana < sp.cost - 0.01) return block('Zu wenig Mana');
+    if (s.mana < sp.cost - 0.01) { const mb = this.el.mbar; mb.classList.remove('flash'); void mb.offsetWidth; mb.classList.add('flash'); this.buzz([10, 40, 10]); return block('Zu wenig Mana'); }
     if ((s.cds[r.id] || 0) > tol) return block(`${sp.name} lädt noch`);
     if (s.gcd > tol) return block('Noch nicht bereit');
     // optimistisch: Abklingzeiten sofort starten (Server bestätigt gleich)
@@ -275,7 +286,7 @@ export class Battle {
     this.opt.mana = { until: now + 600, v: s.mana - sp.cost };
     s.gcd = CFG.gcd; s.cds[r.id] = sp.cd; s.mana -= sp.cost;
     this.src.cast(r.id, Math.round(r.score * 1000) / 1000);
-    sfx.recognized(RARITY_ORDER.indexOf(sp.rarity));
+    sfx.recognized(RARITY_ORDER.indexOf(sp.rarity)); this.buzz(RARITY_ORDER.indexOf(sp.rarity) >= 3 ? [18, 30, 18] : 10);
     return { ok: true, color: sp.color, msg: sp.name };
   }
 
@@ -339,6 +350,7 @@ export class Battle {
     if (this.phase === 'queue') {
       this.queueT = (this.queueT || 0) + dt;
       this.el.queue.querySelector('.b-qt').textContent = `${Math.floor(this.queueT)} s`;
+      const tp = TIPS[Math.floor(this.queueT / 4) % TIPS.length], tel = this.el.queue.querySelector('.b-tip'); if (tel && tel.textContent !== tp) tel.textContent = tp;
     }
     const playing = this.phase === 'play';
     if (playing) {
@@ -408,7 +420,7 @@ export class Battle {
     this.scene.slowmo(0.35, 0.8); this.scene.shake(14);
     const stats = m.stats || [];
     const res = { won: win && !draw, draw, lost: !win && !draw, reason: m.reason, time: m.time, you: this.you, mode: this.mode, stats: stats[this.you] || null, foeStats: stats[1 - this.you] || null, opponent: this.players ? this.players[1 - this.you] : null, level: this.level, casts: this.castLog };
-    music.stop();
+    music.stop(); this.wake(false);
     setTimeout(() => this.showResult(res), 1500);
   }
 

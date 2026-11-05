@@ -370,7 +370,7 @@ export class Scene {
     else if (what === 'win') p.win = 1;
     else if (what === 'dodge') p.dodge = 1;
   }
-  shake(v) { this.shakeV = Math.max(this.shakeV, v); }
+  shake(v) { this.shakeV = Math.max(this.shakeV, v * (this.shakeScale ?? 1)); }
   flash(color, v = 0.4) { this.flashColor = color; this.flashV = Math.max(this.flashV, v); }
   slowmo(f = 0.25, t = 0.14) { this.slow = f; this.slowT = t; }
   light(x, y, r, color, life = 0.4, a = 0.6) { this.lights.push({ x, y, r, color, life, max: life, a }); }

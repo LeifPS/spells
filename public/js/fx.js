@@ -23,7 +23,7 @@ export class FX {
 
   // ------------------------------------------------------------ Grundbausteine
   p(o) {
-    if (this.ps.length > 900) return;
+    if (this.ps.length > (this.max || 900)) return;
     this.ps.push({ x: 0, y: 0, vx: 0, vy: 0, ax: 0, ay: 0, drag: 0, life: 1, size: 6, size1: 0, col: '#fff', a: 1, a1: 0, shape: 'glow', rot: 0, vr: 0, layer: 1, ...o, max: o.life ?? 1 });
   }
   ent(life, draw, layer = 1) { this.ents.push({ life, max: life, draw, layer }); }

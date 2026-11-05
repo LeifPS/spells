@@ -82,7 +82,7 @@ function fresh() {
     pity: { legendary: 0, mythic: 0 },
     stats: { wins: 0, losses: 0, draws: 0, packs: 0, casts: 0, dmg: 0, streak: 0, bestStreak: 0 },
     quests: { day: '', list: [] }, daily: { last: '', streak: 0 },
-    settings: { sound: true, music: true, volume: 0.7 }, tutorial: false, seen: {},
+    settings: { sound: true, music: true, volume: 0.7, vibe: true, fxLow: false }, tutorial: false, seen: {},
   };
 }
 
