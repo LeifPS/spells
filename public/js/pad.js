@@ -60,7 +60,7 @@ export class DrawPad {
     if (res) {
       f.col = res.color || this.color;
       if (res.msg) this.say(res.msg, f.col, res.sub || '');
-      if (res.ok === false) this.shakeT = 0.25;
+      if (res.ok === false) f.gray = true;
       if (res.ok === true) { f.mode = 'absorb'; f.target = this.targetFn ? this.targetFn() : null; if (!f.target) f.mode = 'ink'; }
     }
     this.initFade(f);
@@ -166,6 +166,7 @@ export class DrawPad {
     if (f.mode === 'ink') {
       // Strich quillt auf, wird unscharf und löst sich wie Tinte im Wasser auf
       const a = Math.pow(1 - k, 1.5);
+      if (f.gray) { this.strokePath(g, f.pts, f.col, 5 + 3 * easeOut(k), Math.pow(1 - k, 1.2) * 0.65, k * 3, f.t); return; }
       this.strokePath(g, f.pts, f.col, 5 + 10 * easeOut(k), a * 0.8, k * 5, f.t);
       g.globalCompositeOperation = 'lighter';
       for (const b of f.blobs) {

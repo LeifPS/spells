@@ -15,7 +15,8 @@ const EMOTES = ['thumb', 'laugh', 'wow', 'angry', 'heart', 'flame'];
 const EMOTE_COL = { thumb: '#ffd36a', laugh: '#ffd36a', wow: '#8fd0ff', angry: '#ff6a6a', heart: '#ff6fa5', flame: '#ff9a3a' };
 const tagBot = (el, name, bot) => { el.textContent = name; if (bot) { const t = document.createElement('i'); t.className = 'bot-tag'; t.append(ico('bot')); el.append(' ', t); } };
 const STATUS_ICONS = { burn: 'flame', poison: 'skull', chill: 'snow', stun: 'star', reflect: 'mirror', phase: 'ghost', haste: 'bolt', curse: 'curse', regen: 'leaf', phoenix: 'sparkle' };
-const FIZZLE = { acc: 'Zu ungenau', gcd: 'Noch nicht bereit', cd: 'Noch nicht bereit', mana: 'Zu wenig Mana', stun: 'Betäubt!', deck: 'Nicht im Deck', over: '' };
+// Fehlversuche zeigen keinen Text: der Strich löst sich einfach grau auf.
+const GRAY = '#8e95aa';
 const TIPS = ['Tipp: Tippe auf ein Symbol in der Leiste, um dir die Form einblenden zu lassen.', 'Tipp: Du darfst mitten im Kampf jederzeit zeichnen – es gibt keine Runden.', 'Tipp: Schilde und Heilung vor einem großen Zauber aufbauen.', 'Tipp: Seltene Zauber brauchen eine sauberere Form – lieber langsam und deutlich zeichnen.', 'Tipp: Findet sich kein Gegner, kämpfst du nach kurzer Zeit gegen einen Bot.', 'Tipp: Mana regeneriert sich ständig – spare es nicht für ewig.'];
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -222,7 +223,7 @@ export class Battle {
         else this.callout(sp, e);
         break;
       }
-      case 'fizzle': if (e.p === me) { const t = FIZZLE[e.why]; if (t) this.pad.say(t, '#ff8a8a'); sfx.fizzle(); this.opt = {}; } break;
+      case 'fizzle': if (e.p === me) { sfx.fizzle(); this.opt = {}; } break;
       case 'hit': {
         this.setHp(e.p, e.hp); this.st[e.p].shield = e.shield; fx.hit(e);
         if (e.p === me && e.amount > 0) { this.hurtFlash(e.amount); this.buzz(e.amount >= 30 ? [40, 30, 40] : 18); }
@@ -276,20 +277,16 @@ export class Battle {
       if (r.reason === 'short' || r.reason === 'empty') return { ok: null };
       sfx.bad(); this.buzz([8, 40, 8]);
       if (r.reason === 'low') {
-        const b = r.best, sp = SPELL_BY_ID[b.id], close = b.score >= b.thr - 0.12;
-        this.pad.say('Nicht erkannt', '#ff9a9a', close ? `${sp.name}: ${Math.round(b.score * 100)} % (nötig ${Math.round(b.thr * 100)} %)` : '');
-        return { ok: false, color: '#ff7a7a' };
+        return { ok: false, color: GRAY };
       }
-      if (r.reason === 'ambiguous') { this.pad.say('Unklar – deutlicher zeichnen', '#ffd36a'); return { ok: false, color: '#ffd36a' }; }
-      if (r.reason === 'notInDeck') { this.pad.say('Nicht im Deck', '#ffb86a', SPELL_BY_ID[r.other].name); return { ok: false, color: '#ffb86a' }; }
-      return { ok: false, color: '#ff7a7a' };
+      return { ok: false, color: GRAY };
     }
     const sp = SPELL_BY_ID[r.id], s = this.st[this.you], tol = CFG.tol;
-    const block = (t) => { this.pad.say(t, '#ff9a9a', sp.name); sfx.fizzle(); return { ok: false, color: '#ff7a7a' }; };
-    if (s.stun > 0) return block('Betäubt!');
-    if (s.mana < sp.cost - 0.01) { const mb = this.el.mbar; mb.classList.remove('flash'); void mb.offsetWidth; mb.classList.add('flash'); this.buzz([10, 40, 10]); return block('Zu wenig Mana'); }
-    if ((s.cds[r.id] || 0) > tol) return block(`${sp.name} lädt noch`);
-    if (s.gcd > tol) return block('Noch nicht bereit');
+    const block = () => { sfx.fizzle(); return { ok: false, color: GRAY }; };
+    if (s.stun > 0) return block();
+    if (s.mana < sp.cost - 0.01) { const mb = this.el.mbar; mb.classList.remove('flash'); void mb.offsetWidth; mb.classList.add('flash'); this.buzz([10, 40, 10]); return block(); }
+    if ((s.cds[r.id] || 0) > tol) return block();
+    if (s.gcd > tol) return block();
     // optimistisch: Abklingzeiten sofort starten (Server bestätigt gleich)
     const now = performance.now();
     this.opt = this.opt || {};
