@@ -132,7 +132,7 @@ h4::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#ffd6786
 .card:active{transform:scale(.95)}
 .card .gems{display:flex;gap:3px;height:8px;align-items:center}.card .gems i{width:6px;height:6px;transform:rotate(45deg);background:var(--c);box-shadow:0 0 5px var(--c)}
 .card .art{flex:1;min-height:0;width:100%;display:grid;place-items:center}
-.card canvas{width:86%;height:auto;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--g) 60%,transparent))}
+.card canvas{width:86%;height:auto}
 .card b{font:800 12px var(--serif);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px;letter-spacing:.02em}
 .card small{font-size:10px;color:var(--c);font-weight:800}
 .card .cb{display:flex;gap:2px;width:80%;height:5px}.card .cb i{flex:1;background:#ffffff22;border-radius:1px}.card .cb i.f{background:var(--c);box-shadow:0 0 4px var(--c)}
@@ -141,16 +141,16 @@ h4::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#ffd6786
 .card .dk{position:absolute;bottom:20px;right:7px;width:18px;height:18px;border-radius:50%;background:#2fb35a;border:1.5px solid #0b0628;display:grid;place-items:center}.card .dk .ico{font-size:11px;stroke-width:3}
 .card .lk{position:absolute;top:19px;right:7px}.card .lk .ico{font-size:13px;color:#fff9}
 .card.locked canvas{filter:brightness(0) opacity(.4)}
-.card.locked{filter:saturate(.45) brightness(.85)}
+.card.locked{opacity:.78}
 .card.indeck{--fill:radial-gradient(circle at 50% 36%,color-mix(in srgb,var(--g,#7fb4ff) 26%,#14502e),#06210f 78%)}
 .card.r-epic::after,.card.r-legendary::after,.card.r-mythic::after{content:'';position:absolute;inset:1.5px;z-index:1;pointer-events:none;mix-blend-mode:overlay;
-  background:linear-gradient(115deg,transparent 28%,#fff9 44%,transparent 60%) 120% 0/260% 100% no-repeat;animation:foil 4.2s ease-in-out infinite}
-.card.r-mythic::after{background:linear-gradient(115deg,#ff4a7d66,#ffb52e66,#7fffb066,#4da8ff66,#b565ff66,#ff4a7d66) 0 0/300% 100%;animation:foilm 5s linear infinite}
+  background:linear-gradient(115deg,transparent 28%,#fff6 44%,transparent 60%) 45% 0/260% 100% no-repeat}
+.card.r-mythic::after{background:linear-gradient(115deg,#ff4a7d66,#ffb52e66,#7fffb066,#4da8ff66,#b565ff66,#ff4a7d66) 0 0/300% 100%}
 @keyframes foil{0%{background-position:130% 0}60%,100%{background-position:-30% 0}}
 @keyframes foilm{to{background-position:300% 0}}
 
 /* ---------- Modal als Bottom-Sheet ---------- */
-.modal-ov{position:fixed;inset:0;z-index:60;background:#03021099;backdrop-filter:blur(5px);display:flex;align-items:flex-end;justify-content:center;padding:0;animation:fadein .2s}
+.modal-ov{position:fixed;inset:0;z-index:60;background:#030210d9;display:flex;align-items:flex-end;justify-content:center;padding:0;animation:fadein .2s}
 .modal-ov.out{opacity:0;transition:.2s}.modal-ov.out .modal{transform:translateY(40px);transition:.2s}
 .modal{position:relative;width:min(100%,520px);max-height:92dvh;overflow-y:auto;padding:26px 16px calc(18px + var(--sab));border-radius:26px 26px 0 0;
   background:linear-gradient(#251c78,#0e0834 70%);border:1px solid var(--rim);border-bottom:0;box-shadow:0 -10px 50px #000b;animation:sheet .32s cubic-bezier(.2,.9,.3,1)}

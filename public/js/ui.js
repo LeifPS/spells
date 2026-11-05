@@ -25,7 +25,14 @@ export function h(tag, props = {}, ...kids) {
   for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c));
   return e;
 }
-const icon = (sp, size = 96, opts) => { const c = document.createElement('canvas'); drawSpellIcon(c, sp, size, opts); return c; };
+// Zauber-Symbole werden nur einmal gezeichnet (Schatten/Verläufe sind auf dem iPad teuer) und dann kopiert.
+const iconCache = new Map();
+const icon = (sp, size = 96, opts) => {
+  const key = `${sp.id}|${size}|${opts ? (opts.bg === false) + '' + (opts.ring === false) : ''}`;
+  let src = iconCache.get(key);
+  if (!src) { src = document.createElement('canvas'); drawSpellIcon(src, sp, size, opts); iconCache.set(key, src); }
+  const c = document.createElement('canvas'); c.width = c.height = src.width; c.getContext('2d').drawImage(src, 0, 0); return c;
+};
 const rarName = (r) => RARITIES[r].name;
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
