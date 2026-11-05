@@ -1,7 +1,9 @@
 // Menü: Kampf-Startseite, Zauber & Deck, Shop (Pakete, Garderobe), Aufgaben, Mehr, Tutorial.
 import { Store, PACKS, RANKS, SKINS, rankOf, levelInfo, deckSlots, levelReward, SKIN_BY_ID, STARTER } from './store.js';
 import { SPELLS, SPELL_BY_ID, RARITIES, RARITY_ORDER, LEVEL_COPIES, MAX_LEVEL, levelFor, levelMul, describeParts, roleOf, ROLE_ICON, spellThr } from './spells.js';
-import { drawSpellIcon, glow, TAU, clamp, rgba, rnd, easeOut } from './gfx.js';
+import { drawSpellIcon, glow, glowSprite, mix, lerp, easeInOut, TAU, clamp, rgba, rnd, easeOut } from './gfx.js';
+import { SHAPES } from './shapes.js';
+import { templateNormalized } from './recog.js';
 import { renderBackground, drawWizardArt, drawAvatar, THEME_NAMES } from './scene.js';
 import { BOT_LEVELS } from './bot.js';
 import { FLOORS, MODS, towerOpts } from './tower.js';
@@ -448,53 +450,191 @@ export class App {
 }
 
 // ------------------------------------------------------------ Paket-Öffnung
+// Ablauf: Paket lädt sich auf (Beben, Risse, Energie in der Farbe der besten Karte) -> Explosion ->
+// pro Karte wird der Zauber langsam in Seltenheitsfarbe nachgezeichnet -> erst dann erscheinen Karte und Name.
 function packFlow(app, P, cards, done) {
   const ov = h('div', { class: 'pk-ov' });
   document.body.append(ov);
-  const maxR = Math.max(...cards.map((c) => RARITY_ORDER.indexOf(c.rarity)));
-  const stage = h('div', { class: 'pk-stage' }); ov.append(stage);
+  const rIdx = (c) => RARITY_ORDER.indexOf(c.rarity), colOf = (c) => RARITIES[c.rarity].color;
+  const maxR = Math.max(...cards.map(rIdx)), maxCol = RARITIES[RARITY_ORDER[maxR]].color;
+  const stage = h('div', { class: 'pk-stage' });
+  const cv = h('canvas', { class: 'pk-cv' });
+  ov.append(stage, cv);
+  const g = cv.getContext('2d');
+  let W = 0, H = 0, dpr = 1;
+  const resize = () => { dpr = Math.min(window.devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; };
+  resize(); window.addEventListener('resize', resize);
+
+  // ---- kleine Partikel-/Ring-Engine auf dem Vollbild-Canvas
+  const parts = [], rings = [], cracks = [];
+  const spawn = (o) => parts.push({ vx: 0, vy: 0, drag: 1.2, life: 1, max: 1, s: 10, a: 1, grav: 0, ...o, max: o.life ?? 1 });
+  const burst = (x, y, n, col, speed = 320, s = 12) => { for (let i = 0; i < n; i++) { const a = Math.random() * TAU, v = speed * (0.25 + Math.random()); spawn({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.6, 1.3), s: rnd(s * 0.5, s), col: Math.random() < 0.3 ? '#ffffff' : col, grav: 120 }); } };
+  const ring = (x, y, col, r1, dur = 0.7, w = 8) => rings.push({ x, y, col, r1, t: 0, dur, w });
+  let t0 = performance.now(), alive = true, charge = null, rune = null, fadeRune = null;
+
+  const frame = (now) => {
+    if (!alive) return;
+    const dt = Math.min(0.05, (now - t0) / 1000); t0 = now;
+    step(dt); draw(); requestAnimationFrame(frame);
+  };
+
+  function step(dt) {
+    for (const p of parts) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.grav * dt; const d = Math.pow(0.5, dt * p.drag * 3); p.vx *= d; p.vy *= d; }
+    for (let i = parts.length - 1; i >= 0; i--) if (parts[i].life <= 0) parts.splice(i, 1);
+    for (const r of rings) r.t += dt; for (let i = rings.length - 1; i >= 0; i--) if (rings[i].t >= rings[i].dur) rings.splice(i, 1);
+    if (charge) stepCharge(dt);
+    if (rune) stepRune(dt);
+    if (fadeRune) { fadeRune.t += dt; if (fadeRune.t > 0.7) fadeRune = null; }
+  }
+
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    if (charge) drawCharge();
+    if (rune) drawRune(rune, 1);
+    if (fadeRune) drawRune(fadeRune.r, 1 - fadeRune.t / 0.7, true);
+    g.globalCompositeOperation = 'lighter';
+    for (const p of parts) { g.globalAlpha = clamp(p.life / p.max) * p.a; const s = p.s * (0.4 + 0.6 * clamp(p.life / p.max)); g.drawImage(glowSprite(p.col), p.x - s, p.y - s, s * 2, s * 2); }
+    for (const r of rings) { const k = r.t / r.dur; g.globalAlpha = (1 - k) * 0.9; g.strokeStyle = r.col; g.lineWidth = r.w * (1 - k * 0.6); g.beginPath(); g.arc(r.x, r.y, r.r1 * easeOut(k), 0, TAU); g.stroke(); }
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  }
+
+  // ---- Phase 1: Paket lädt sich auf
   const pack = h('button', { class: 'pk-pack ' + P.id, style: `--c:${P.color}` }, ico(P.id === 'basic' ? 'sparkle' : 'crown'), h('small', {}, 'Tippe zum Öffnen'));
   stage.append(pack);
+  requestAnimationFrame(frame);
   let opened = false;
-  pack.onclick = async () => {
+  pack.onclick = () => {
     if (opened) return; opened = true; unlock();
-    for (let i = 0; i < 3; i++) { pack.classList.remove('shake'); void pack.offsetWidth; pack.classList.add('shake'); sfx.packShake(); await sleep(260); }
-    pack.classList.add('burst'); ov.style.setProperty('--flash', RARITIES[RARITY_ORDER[maxR]].color); ov.classList.add('flash'); sfx.reveal(maxR >= 3 ? 2 : 0);
-    await sleep(380); pack.remove(); showCards();
+    pack.classList.add('charging'); pack.querySelector('small').textContent = '';
+    const r = pack.getBoundingClientRect();
+    charge = { t: 0, dur: 1.7 + maxR * 0.15, x: r.left + r.width / 2, y: r.top + r.height / 2, tick: 0, nc: 0 };
+    for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU + Math.random() * 0.5; cracks.push({ a, len: rnd(0.5, 1), w: rnd(1.5, 3.2), at: rnd(0.1, 0.65) }); }
   };
+  function stepCharge(dt) {
+    const c = charge; c.t += dt; const k = clamp(c.t / c.dur);
+    const col = mix(P.color, maxCol, clamp(k * 1.4)), amp = 2 + 16 * k * k;
+    pack.style.transform = `translate(${rnd(-amp, amp)}px,${rnd(-amp, amp)}px) rotate(${rnd(-amp, amp) * 0.35}deg) scale(${1 + 0.1 * k})`;
+    pack.style.filter = `drop-shadow(0 0 ${30 + 90 * k}px ${col}) brightness(${1 + 0.8 * k * k})`;
+    c.tick += dt; if (c.tick > 0.34 - 0.22 * k) { c.tick = 0; sfx.packShake(); }
+    const n = Math.round((6 + 40 * k) * dt * 60 * 0.45);
+    for (let i = 0; i < n; i++) { const a = Math.random() * TAU, d = rnd(0.35, 0.7) * Math.min(W, H), sp = d / rnd(0.5, 0.9); spawn({ x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d, vx: -Math.cos(a) * sp, vy: -Math.sin(a) * sp, drag: 0, life: d / sp, s: rnd(6, 14), col: Math.random() < 0.35 ? '#ffffff' : col }); }
+    if (c.t >= c.dur) explode();
+  }
+  function drawCharge() {
+    const c = charge, k = clamp(c.t / c.dur), col = mix('#ffffff', maxCol, clamp(k * 1.3));
+    g.save(); g.translate(c.x, c.y); g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = 0.5 * k; g.drawImage(glowSprite(maxCol), -150 - 160 * k, -150 - 160 * k, 300 + 320 * k, 300 + 320 * k);
+    g.globalCompositeOperation = 'source-over'; g.lineCap = 'round'; g.shadowColor = col; g.shadowBlur = 18;
+    for (const cr of cracks) {
+      const kk = clamp((k - cr.at) / (1 - cr.at)); if (kk <= 0) continue;
+      const L = cr.len * 130 * easeOut(kk); g.strokeStyle = col; g.lineWidth = cr.w * (0.5 + kk); g.globalAlpha = 0.95;
+      g.beginPath(); g.moveTo(0, 0);
+      let x = 0, y = 0; const seg = 6; for (let i = 1; i <= seg; i++) { const f = i / seg; x = Math.cos(cr.a + Math.sin(i * 2.7 + cr.a * 5) * 0.28) * L * f; y = Math.sin(cr.a + Math.sin(i * 2.7 + cr.a * 5) * 0.28) * L * f; g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.restore();
+  }
+  function explode() {
+    const c = charge; charge = null; cracks.length = 0;
+    ov.style.setProperty('--flash', maxCol); ov.classList.remove('flash'); void ov.offsetWidth; ov.classList.add('flash');
+    ring(c.x, c.y, '#ffffff', Math.max(W, H) * 0.7, 0.8, 14); ring(c.x, c.y, maxCol, Math.max(W, H) * 0.5, 0.65, 8);
+    burst(c.x, c.y, 90 + 30 * maxR, maxCol, 520, 18);
+    sfx.reveal(maxR >= 3 ? 2 : 0); document.body.classList.add('quake'); setTimeout(() => document.body.classList.remove('quake'), 500);
+    pack.classList.add('burst'); pack.style.transform = ''; pack.style.filter = '';
+    setTimeout(() => { pack.remove(); showCards(); }, 420);
+  }
+
+  // ---- Phase 2: Karten
+  let hold, info, els = [], cur = -1, state = 'idle';
   function showCards() {
     stage.innerHTML = '';
-    const hold = h('div', { class: 'pk-cards' }), info = h('div', { class: 'pk-info' }, 'Tippe, um die Karten aufzudecken');
+    hold = h('div', { class: 'pk-cards' }); info = h('div', { class: 'pk-info' }, '');
     stage.append(hold, info);
-    const els = cards.map((c, i) => {
+    els = cards.map((c, i) => {
       const sp = SPELL_BY_ID[c.id], R = RARITIES[c.rarity];
-      const face = h('div', { class: 'face' }, h('small', { class: 'rr', style: `color:${R.color}` }, R.name.toUpperCase()), icon(sp, 200), h('h3', {}, sp.name), c.isNew ? h('span', { class: 'new' }, 'NEU!') : c.refund ? h('span', { class: 'cp' }, rich(`Max-Stufe: +${c.refund} {coin}`)) : h('span', { class: 'cp' }, `Kopie ${c.copies}${c.levelUp ? ' · STUFE ' + c.level + '!' : ''}`));
-      const card = h('div', { class: 'pc', style: `--c:${R.color};--g:${sp.color};--i:${i}` }, h('div', { class: 'in' }, h('div', { class: 'back' }, ico('sparkle')), face));
+      const face = h('div', { class: 'face' }, h('small', { class: 'rr', style: `color:${R.color}` }, R.name.toUpperCase()), icon(sp, 200), h('h3', {}, sp.name), c.isNew ? h('span', { class: 'new' }, 'NEU!') : c.refund ? h('span', { class: 'cp' }, rich(`Max-Stufe: +${c.refund} {coin}`)) : h('span', { class: 'cp' }, `Kopie ${c.copies}`));
+      const card = h('div', { class: 'pc flip', style: `--c:${R.color};--g:${sp.color};--i:${i}` }, h('div', { class: 'in' }, h('div', { class: 'back' }, ico('sparkle')), face));
       hold.append(card); return card;
     });
-    let cur = -1;
-    const reveal = async () => {
-      if (cur >= 0 && cur < cards.length) els[cur].classList.add('gone');
-      cur++;
-      if (cur >= cards.length) { summary(); return; }
-      const c = cards[cur], el = els[cur], ri = RARITY_ORDER.indexOf(c.rarity);
-      el.classList.add('flip'); sfx.reveal(ri);
-      if (ri >= 2) { ov.style.setProperty('--flash', RARITIES[c.rarity].color); ov.classList.remove('flash'); void ov.offsetWidth; ov.classList.add('flash'); }
-      if (ri >= 3) { ov.classList.add('rays'); document.body.classList.add('quake'); setTimeout(() => document.body.classList.remove('quake'), 500); } else ov.classList.remove('rays');
-      info.textContent = cur < cards.length - 1 ? 'Weiter tippen …' : 'Tippen für die Übersicht';
-    };
-    stage.onclick = reveal;
+    stage.onclick = onTap;
+    setTimeout(next, 350);
   }
+  const onTap = () => {
+    if (state === 'draw') { if (rune) rune.t = rune.dur; }            // Zeichnen überspringen
+    else if (state === 'shown') next();
+  };
+  function next() {
+    if (cur >= 0 && els[cur]) els[cur].classList.add('gone');
+    cur++; info.textContent = '';
+    if (cur >= cards.length) { summary(); return; }
+    ov.classList.remove('rays');
+    const c = cards[cur], ri = rIdx(c), col = colOf(c), sp = SPELL_BY_ID[c.id];
+    const r = hold.getBoundingClientRect(), S = Math.min(W * 0.8, 340);
+    const raw = templateNormalized(sp.shape), k = S * 0.74;
+    const pts = raw.map(([x, y]) => [r.left + r.width / 2 + x * k, r.top + r.height / 2 + y * k]);
+    const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    rune = { pts, cum, L: cum[cum.length - 1], t: 0, dur: 1.5 + ri * 0.35, col, ri, cx: r.left + r.width / 2, cy: r.top + r.height / 2, S, closed: !!SHAPES[sp.shape].closed, spin: 0 };
+    state = 'draw'; sfx.packShake();
+    ov.style.setProperty('--flash', col);
+  }
+  function headPos(rn, d) {
+    const { pts, cum } = rn; let i = 1; while (i < cum.length - 1 && cum[i] < d) i++;
+    const a = cum[i - 1], b = cum[i], f = b > a ? clamp((d - a) / (b - a)) : 0;
+    return [lerp(pts[i - 1][0], pts[i][0], f), lerp(pts[i - 1][1], pts[i][1], f), i, f];
+  }
+  function stepRune(dt) {
+    const rn = rune; rn.t += dt; rn.spin += dt;
+    const k = clamp(rn.t / rn.dur), d = rn.L * easeInOut(k) * 0.999 + rn.L * 0.001;
+    const [x, y] = headPos(rn, d);
+    const n = Math.round((1.5 + rn.ri * 1.2) * dt * 60 * (k < 1 ? 1 : 0));
+    for (let i = 0; i < n; i++) spawn({ x, y, vx: rnd(-70, 70), vy: rnd(-90, 20), life: rnd(0.4, 0.9), s: rnd(5, 12 + rn.ri * 2), col: Math.random() < 0.4 ? '#ffffff' : rn.col, grav: 90 });
+    if (rn.t >= rn.dur) finishRune();
+  }
+  function drawRune(rn, alpha, fading = false) {
+    const k = fading ? 1 : clamp(rn.t / rn.dur), d = rn.L * (fading ? 1 : easeInOut(k));
+    g.save(); g.globalAlpha = alpha;
+    // Aura + Runenkreis
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = alpha * (0.22 + 0.5 * k) * (0.55 + 0.12 * rn.ri); g.drawImage(glowSprite(rn.col), rn.cx - rn.S * 0.95, rn.cy - rn.S * 0.95, rn.S * 1.9, rn.S * 1.9);
+    g.globalCompositeOperation = 'source-over';
+    g.translate(rn.cx, rn.cy);
+    for (let j = 0; j < 1 + (rn.ri >= 3 ? 1 : 0) + (rn.ri >= 4 ? 1 : 0); j++) {
+      g.save(); g.rotate((rn.spin || 0) * (j % 2 ? -0.6 : 0.4) + j); g.globalAlpha = alpha * (0.25 + 0.5 * k); g.strokeStyle = rn.col; g.lineWidth = 1.6; g.setLineDash([rn.S * 0.025, rn.S * 0.04]);
+      g.beginPath(); g.arc(0, 0, rn.S * (0.5 + j * 0.07), 0, TAU); g.stroke(); g.restore();
+    }
+    g.translate(-rn.cx, -rn.cy);
+    // Strich bis zum Kopf
+    const pts = rn.pts, w = Math.max(5, rn.S * 0.045);
+    g.lineCap = 'round'; g.lineJoin = 'round'; g.shadowColor = rn.col; g.shadowBlur = rn.S * 0.1;
+    const path = () => { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { if (rn.cum[i] <= d) g.lineTo(pts[i][0], pts[i][1]); else { const a = rn.cum[i - 1], f = clamp((d - a) / (rn.cum[i] - a)); g.lineTo(lerp(pts[i - 1][0], pts[i][0], f), lerp(pts[i - 1][1], pts[i][1], f)); break; } } };
+    g.globalAlpha = alpha; g.strokeStyle = rn.col; g.lineWidth = w; path(); g.stroke();
+    g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = w * 0.32; path(); g.stroke();
+    if (!fading && k < 1) { const [hx, hy] = headPos(rn, d); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(glowSprite('#ffffff'), hx - w * 2.6, hy - w * 2.6, w * 5.2, w * 5.2); g.drawImage(glowSprite(rn.col), hx - w * 4.5, hy - w * 4.5, w * 9, w * 9); }
+    g.restore();
+  }
+  function finishRune() {
+    const rn = rune; rune = null; fadeRune = { r: rn, t: 0 }; state = 'shown';
+    const ri = rn.ri;
+    ov.classList.remove('flash'); void ov.offsetWidth; ov.classList.add('flash');
+    ring(rn.cx, rn.cy, rn.col, rn.S * (0.9 + 0.1 * ri), 0.7, 6 + ri * 2); if (ri >= 2) ring(rn.cx, rn.cy, '#ffffff', rn.S * 1.3, 0.55, 5);
+    burst(rn.cx, rn.cy, 26 + 26 * ri, rn.col, 260 + 70 * ri, 12 + ri * 2);
+    sfx.reveal(ri);
+    if (ri >= 3) { ov.classList.add('rays'); document.body.classList.add('quake'); setTimeout(() => document.body.classList.remove('quake'), 500); }
+    els[cur].classList.add('show');
+    setTimeout(() => { if (state === 'shown') info.textContent = cur < cards.length - 1 ? 'Weiter tippen' : 'Tippen für die Übersicht'; }, 650);
+  }
+
+  // ---- Übersicht
   function summary() {
-    stage.onclick = null; ov.classList.remove('rays');
+    stage.onclick = null; state = 'sum'; ov.classList.remove('rays');
     stage.innerHTML = '';
     const total = cards.filter((c) => c.refund).reduce((a, c) => a + c.refund, 0);
-    const grid = h('div', { class: 'pk-sum' }, ...cards.map((c) => { const sp = SPELL_BY_ID[c.id]; return h('div', { class: 'sc pn', style: `--c:${RARITIES[c.rarity].color}` }, icon(sp, 100), h('b', {}, sp.name), c.isNew ? h('em', {}, 'NEU') : h('small', {}, c.levelUp ? `Stufe ${c.level}!` : `×${c.copies}`)); }));
+    const grid = h('div', { class: 'pk-sum' }, ...cards.map((c, i) => { const sp = SPELL_BY_ID[c.id]; return h('div', { class: 'sc pn', style: `--c:${RARITIES[c.rarity].color};animation-delay:${i * 90}ms` }, icon(sp, 100), h('b', {}, sp.name), c.isNew ? h('em', {}, 'NEU') : h('small', {}, c.levelUp ? `Stufe ${c.level}!` : `×${c.copies}`)); }));
     const can = app.store.d.coins >= P.price;
-    stage.append(h('h2', {}, 'Deine Beute'), grid, total ? h('p', { class: 'mut' }, rich(`+${total} {coin} Rückerstattung`)) : null,
-      h('div', { class: 'row' }, can ? h('button', { class: 'btn ghost price', onclick: () => { close(); app.openPack(P.id, false); } }, 'Nochmal ', ico('coin'), P.price) : null, h('button', { class: 'btn', onclick: () => { close(); } }, 'Fertig')));
+    stage.append(...[h('h2', {}, 'Deine Beute'), grid, total ? h('p', { class: 'mut' }, rich(`+${total} {coin} Rückerstattung`)) : null,
+      h('div', { class: 'row' }, can ? h('button', { class: 'btn ghost price', onclick: () => { close(); app.openPack(P.id, false); } }, 'Nochmal ', ico('coin'), P.price) : null, h('button', { class: 'btn', onclick: () => { close(); } }, 'Fertig'))].filter(Boolean));
     sfx.good();
   }
-  function close() { ov.remove(); done(); }
+  function close() { alive = false; window.removeEventListener('resize', resize); ov.remove(); done(); }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
