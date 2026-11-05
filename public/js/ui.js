@@ -5,6 +5,7 @@ import { drawSpellIcon, glow, TAU, clamp, rgba, rnd, easeOut } from './gfx.js';
 import { renderBackground, drawWizardArt, drawAvatar, THEME_NAMES } from './scene.js';
 import { BOT_LEVELS } from './bot.js';
 import { sfx, music, audio, unlock } from './audio.js';
+import { ico, rich, emojiIco, rankBadge } from './icons.js';
 
 // ------------------------------------------------------------ kleine DOM-Helfer
 export function h(tag, props = {}, ...kids) {
@@ -62,6 +63,13 @@ class Hero {
   }
 }
 
+// Münzregen bei Belohnungen
+function coinFall(n = 14) {
+  const box = h('div', { class: 'coinfall' });
+  for (let i = 0; i < n; i++) { const c = ico('coin'); c.style.left = Math.random() * 96 + '%'; c.style.setProperty('--d', 1.1 + Math.random() * 0.9 + 's'); c.style.setProperty('--w', Math.random() * 0.5 + 's'); box.append(c); }
+  document.body.append(box); setTimeout(() => box.remove(), 2800);
+}
+
 // ------------------------------------------------------------ App
 export class App {
   constructor(root, store, battle) {
@@ -80,7 +88,7 @@ export class App {
     if (!store.d.tutorial && !store.d.seen.welcome) setTimeout(() => this.welcome(), 400);
   }
   profile() { return this.store.battleProfile(); }
-  toast(t) { const e = document.getElementById('toast'); e.textContent = t; e.className = 'on'; clearTimeout(this._tt); this._tt = setTimeout(() => (e.className = ''), 2800); }
+  toast(t) { const e = document.getElementById('toast'); e.replaceChildren(rich(t)); e.className = 'on'; clearTimeout(this._tt); this._tt = setTimeout(() => (e.className = ''), 2800); }
   applyAudio() { const s = this.store.d.settings; audio.setMuted(!s.sound); audio.setVolume(s.volume); audio.setMusic(s.music); music.start('menu'); }
 
   // ---- Gerüst
@@ -88,12 +96,12 @@ export class App {
     const r = this.root; r.innerHTML = '';
     this.hdr = h('header', { class: 'top' });
     this.main = h('main', { class: 'screens' });
-    this.nav = h('nav', { class: 'tabs' });
-    const tabs = [['fight', '⚔️', 'Kampf'], ['spells', '📖', 'Zauber'], ['shop', '🎁', 'Shop'], ['quests', '🎯', 'Aufgaben'], ['more', '⚙️', 'Mehr']];
-    this.tabBtn = {};
-    for (const [id, ic, label] of tabs) { const b = h('button', { class: 'tab', onclick: () => { sfx.click(); this.show(id); } }, h('span', { class: 'ti' }, ic), h('small', {}, label), h('i', { class: 'dot' })); this.tabBtn[id] = b; this.nav.append(b); }
+    const tabs = [['fight', 'wands', 'Kampf'], ['spells', 'book', 'Zauber'], ['shop', 'gem', 'Shop'], ['quests', 'scroll', 'Aufgaben'], ['more', 'sliders', 'Mehr']];
+    this.tabIds = tabs.map((t) => t[0]); this.tabBtn = {};
+    this.orb = h('div', { class: 'orb' }, h('i'));
+    this.nav = h('nav', { class: 'dock' }, h('div', { class: 'bg pn' }), this.orb);
+    for (const [id, ic, label] of tabs) { const b = h('button', { class: 'tab', 'aria-label': label, onclick: () => { sfx.click(); this.show(id); } }, h('span', { class: 'ti' }, ico(ic)), h('small', {}, label), h('i', { class: 'dot' })); this.tabBtn[id] = b; this.nav.append(b); }
     r.append(h('div', { class: 'app' }, this.hdr, this.main, this.nav));
-    this.screens = {};
     this.heroCv = h('canvas', { class: 'hero-cv' });
     this.hero = new Hero(this.heroCv, this.store);
     this.refreshHeader();
@@ -101,16 +109,21 @@ export class App {
   refreshHeader() {
     const d = this.store.d, li = levelInfo(d.xp), hdr = this.hdr;
     if (!this.hdrBuilt) {
-      this.av = h('canvas', { class: 'hav', width: 44, height: 44 });
-      this.hdrName = h('b'); this.hdrLv = h('small'); this.hdrXp = h('i');
-      this.coinEl = h('span', { class: 'pill coin' });
-      this.sndBtn = h('button', { class: 'pill', onclick: () => { unlock(); const s = this.store.d.settings; s.sound = !s.sound; this.store.save(); this.applyAudio(); sfx.click(); } });
-      hdr.append(h('div', { class: 'who', onclick: () => this.show('more') }, this.av, h('div', { class: 'wi' }, this.hdrName, h('div', { class: 'xpb' }, this.hdrXp), this.hdrLv)), h('div', { class: 'pills' }, this.coinEl, this.sndBtn));
-      this.hdrBuilt = true;
+      this.av = h('canvas', { class: 'hav', width: 80, height: 80 });
+      this.hdrName = h('b'); this.hdrLv = h('small'); this.lvlEl = h('b', { class: 'lvl' });
+      const svg = h('span', { html: '<svg class="avring" viewBox="0 0 52 52"><circle class="trk" cx="26" cy="26" r="21"/><circle class="prg" cx="26" cy="26" r="21"/></svg>' });
+      this.prg = svg.querySelector('.prg'); this.prg.style.strokeDashoffset = 131.95;
+      this.coinEl = h('div', { class: 'cur pn' }, ico('coin'), h('span'));
+      this.sndBtn = h('button', { class: 'iconbtn pn', 'aria-label': 'Ton', onclick: () => { unlock(); const s = this.store.d.settings; s.sound = !s.sound; this.store.save(); this.applyAudio(); sfx.click(); } });
+      hdr.append(h('div', { class: 'who', onclick: () => this.show('more') }, h('div', { class: 'avwrap' }, svg.firstChild, this.av, this.lvlEl), h('div', { class: 'wi' }, this.hdrName, this.hdrLv)), h('div', { class: 'pills' }, this.coinEl, this.sndBtn));
+      this.hdrBuilt = true; this._coins = d.coins;
     }
-    this.hdrName.textContent = d.name; this.hdrLv.textContent = `Stufe ${li.lvl} · ${li.into}/${li.need} XP`; this.hdrXp.style.transform = `scaleX(${li.into / li.need})`;
-    this.coinEl.textContent = `🪙 ${fmt(d.coins)}`; this.sndBtn.textContent = d.settings.sound ? '🔊' : '🔇';
-    const sk = JSON.stringify(this.store.skinData()); if (this._sk !== sk) { this._sk = sk; drawAvatar(this.av, this.store.skinData(), 44); }
+    this.hdrName.textContent = d.name; this.lvlEl.textContent = li.lvl; this.hdrLv.textContent = `${this.store.rank.name} · ${li.into}/${li.need} XP`;
+    this.prg.style.strokeDashoffset = (131.95 * (1 - li.into / li.need)).toFixed(1);
+    const span = this.coinEl.querySelector('span'); span.textContent = fmt(d.coins);
+    if (d.coins > this._coins) { this.coinEl.classList.remove('bump'); void this.coinEl.offsetWidth; this.coinEl.classList.add('bump'); } this._coins = d.coins;
+    this.sndBtn.replaceChildren(ico(d.settings.sound ? 'sound' : 'mute'));
+    const sk = JSON.stringify(this.store.skinData()); if (this._sk !== sk) { this._sk = sk; drawAvatar(this.av, this.store.skinData(), 80); }
     this.tabBtn.quests.classList.toggle('has', this.store.dailyReady() || d.quests.list.some((q) => !q.claimed && this.store.questDone(q)));
     this.tabBtn.shop.classList.toggle('has', d.freePacks > 0);
   }
@@ -118,6 +131,7 @@ export class App {
   show(tab, keep) {
     this.tab = tab;
     for (const [id, b] of Object.entries(this.tabBtn)) b.classList.toggle('on', id === tab);
+    this.orb.style.transform = `translateX(${this.tabIds.indexOf(tab) * 100}%)`;
     this.main.innerHTML = ''; this.main.scrollTop = 0;
     this.hero.stop();
     const fn = { fight: (e) => this.sFight(e), spells: (e) => this.sSpells(e), shop: (e) => this.sShop(e), quests: (e) => this.sQuests(e), more: (e) => this.sMore(e) }[tab];
@@ -125,11 +139,11 @@ export class App {
     this.refreshHeader();
   }
 
-  // ---- Modal
+  // ---- Modal (Bottom-Sheet)
   modal(content, { cls = '', close = true } = {}) {
     const ov = h('div', { class: 'modal-ov', onclick: (e) => { if (e.target === ov && close) end(); } });
-    const end = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 180); };
-    const card = h('div', { class: 'modal ' + cls }, close ? h('button', { class: 'x', onclick: () => { sfx.back(); end(); } }, '✕') : null, content);
+    const end = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 200); };
+    const card = h('div', { class: 'modal ' + cls }, close ? h('button', { class: 'x', 'aria-label': 'Schließen', onclick: () => { sfx.back(); end(); } }, ico('close')) : null, content);
     ov.append(card); document.body.append(ov); return { close: end, ov, card };
   }
   confirm(text, yes, label = 'Ja') { const m = this.modal(h('div', { class: 'cf' }, h('p', {}, text), h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Abbrechen'), h('button', { class: 'btn red', onclick: () => { m.close(); yes(); } }, label))), { close: true }); }
@@ -138,35 +152,45 @@ export class App {
   sFight(el) {
     const st = this.store, d = st.d, rk = st.rank;
     const rankTxt = rk.next ? `${d.trophies - rk.min} / ${rk.next.min - rk.min} bis ${rk.next.name}` : 'Höchster Rang!';
-    const badge = h('div', { class: 'rankcard' }, h('div', { class: 'ri', style: `--c:${rk.color}` }, rk.icon), h('div', { class: 'rt' }, h('b', { style: `color:${rk.color}` }, rk.name), h('div', { class: 'rb' }, h('i', { style: `transform:scaleX(${rk.prog});background:${rk.color}` })), h('small', {}, rankTxt)), h('div', { class: 'tr' }, '🏆 ' + fmt(d.trophies)));
-    const hero = h('div', { class: 'hero' }, this.heroCv, badge);
-    const deck = h('div', { class: 'deckstrip', onclick: () => { sfx.click(); this.show('spells'); } }, ...d.deck.map((id) => h('div', { class: 'ds', style: `--c:${RARITIES[SPELL_BY_ID[id].rarity].color}` }, icon(SPELL_BY_ID[id], 64))), h('span', { class: 'edit' }, '✎'));
-    const go = h('button', { class: 'btn big fightbtn', onclick: () => this.fight() }, h('span', {}, '⚔️ Kämpfen'), h('small', {}, 'Online gegen Spieler'));
-    const tr = h('button', { class: 'btn ghost', onclick: () => this.trainMenu() }, '🎯 Training');
-    const daily = this.store.dailyReady() ? h('button', { class: 'gift', onclick: () => this.claimDaily() }, h('span', {}, '🎁'), h('div', {}, h('b', {}, 'Tagesgeschenk'), h('small', {}, 'Jetzt abholen!'))) : null;
-    const free = d.freePacks > 0 ? h('button', { class: 'gift pack', onclick: () => this.openPack('basic', true) }, h('span', {}, '📦'), h('div', {}, h('b', {}, `${d.freePacks}× Gratis-Paket`), h('small', {}, 'Jetzt öffnen!'))) : null;
-    el.append(hero, h('div', { class: 'pad' }, go, h('div', { class: 'row' }, tr, h('button', { class: 'btn ghost', onclick: () => this.show('spells') }, '📖 Deck')), deck, daily, free, this.dailyQuestPeek()));
+    const rankplate = h('div', { class: 'rankplate pn' }, rankBadge(rk.idx, rk.color, 46), h('div', { class: 'rt' }, h('b', { style: `color:${rk.color}` }, rk.name), h('div', { class: 'rb' }, h('i', { style: `transform:scaleX(${rk.prog});background:${rk.color}` })), h('small', {}, rankTxt)), h('div', { class: 'tr' }, ico('trophy'), fmt(d.trophies)));
+    const hero = h('div', { class: 'hero' }, this.heroCv, rankplate);
+    const runes = h('span', { html: '<svg class="runes" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" stroke-dasharray="1.5 6.2"/><circle cx="50" cy="50" r="39" stroke-dasharray="16 5" stroke-opacity=".6"/></svg>' }).firstChild;
+    const portal = h('button', { class: 'portal', 'aria-label': 'Kämpfen', onclick: () => this.fight(portal) }, h('i', { class: 'ring' }), h('i', { class: 'core' }, h('i', { class: 'swirl' })), runes, h('span', { class: 'pt' }, ico('wands'), h('b', {}, 'KÄMPFEN'), h('small', {}, 'Online-Duell')));
+    const left = h('button', { class: 'sidebtn pn left', onclick: () => { sfx.click(); this.show('spells'); } }, ico('book'), 'Deck', h('small', {}, `${d.deck.length}/${st.slots} Zauber`));
+    const right = h('button', { class: 'sidebtn pn right', onclick: () => this.modesMenu() }, ico('target'), 'Modi', h('small', {}, 'Training & mehr'));
+    const row = h('div', { class: 'portalrow' }, left, portal, right);
+    const strip = h('div', { class: 'zl', onclick: () => { sfx.click(); this.show('spells'); } }, ...d.deck.map((id) => h('div', { class: 'zs', style: `--c:${RARITIES[SPELL_BY_ID[id].rarity].color}` }, icon(SPELL_BY_ID[id], 64))));
+    const gifts = [];
+    if (st.dailyReady()) gifts.push(h('button', { class: 'gift pn', onclick: () => this.claimDaily() }, ico('gift'), h('div', {}, h('b', {}, 'Tagesgeschenk'), h('small', {}, 'Jetzt abholen!'))));
+    if (d.freePacks > 0) gifts.push(h('button', { class: 'gift pack pn', onclick: () => this.openPack('basic', true) }, ico('pack'), h('div', {}, h('b', {}, `${d.freePacks}× Gratis-Paket`), h('small', {}, 'Jetzt öffnen!'))));
+    el.append(hero, row, h('div', { class: 'pad' }, strip, gifts.length ? h('div', { class: 'gifts' }, ...gifts) : null, this.dailyQuestPeek()));
     this.hero.setDeck(); this.hero.size(); this.hero.start();
   }
   dailyQuestPeek() {
     const qs = this.store.d.quests.list;
-    return h('div', { class: 'peek', onclick: () => this.show('quests') }, h('b', {}, '🎯 Tagesaufgaben'), ...qs.map((q) => h('div', { class: 'pq' + (q.claimed ? ' done' : '') }, h('span', {}, q.text), h('em', {}, q.claimed ? '✓' : `${Math.min(q.prog, q.goal)}/${q.goal}`))));
+    return h('div', { class: 'peek pn', onclick: () => this.show('quests') }, h('b', {}, ico('scroll'), 'Tagesaufgaben'), ...qs.map((q) => h('div', { class: 'pq' + (q.claimed ? ' done' : '') }, h('span', {}, q.text), h('em', {}, q.claimed ? '✓' : `${Math.min(q.prog, q.goal)}/${q.goal}`))));
   }
-  fight() {
+  fight(btn) {
     unlock();
     if (!this.store.deckOk()) return this.toast('Dein Deck braucht mindestens 3 Zauber');
-    sfx.click(); this.root.hidden = true; this.hero.stop();
-    this.battle.play(this.profile(), { mode: 'online' });
+    sfx.click(); if (btn) btn.classList.add('go');
+    setTimeout(() => { if (btn) btn.classList.remove('go'); this.root.hidden = true; this.hero.stop(); this.battle.play(this.profile(), { mode: 'online' }); }, btn ? 420 : 0);
+  }
+  modesMenu() {
+    sfx.click();
+    const m = this.modal(h('div', {}, h('h3', {}, 'Modi'), h('p', { class: 'mut' }, 'Wähle, wie du spielen möchtest.'),
+      h('button', { class: 'opt pn', onclick: () => { m.close(); this.trainMenu(); } }, h('span', { class: 'oi' }, ico('target')), h('div', {}, h('b', {}, 'Training'), h('small', {}, 'Gegen Bots üben – ohne Risiko'))),
+    ));
   }
   trainMenu() {
     sfx.click();
-    const opts = [[0, '🪵', 'Übungspuppe', 'Greift nicht an – zum Üben der Formen'], [1, '🌱', 'Leicht', 'Wirkt langsam und patzt oft'], [2, '🔥', 'Mittel', 'Nutzt Schilde, Heilung und Kombos'], [3, '💀', 'Schwer', 'Schnell, präzise, gnadenlos']];
-    const m = this.modal(h('div', {}, h('h3', {}, 'Training'), h('p', { class: 'mut' }, 'Kein Risiko – etwas Erfahrung, aber keine Trophäen.'), ...opts.map(([lv, ic, name, desc]) => h('button', { class: 'opt', onclick: () => { m.close(); this.startTrain(lv); } }, h('span', { class: 'oi' }, ic), h('div', {}, h('b', {}, name), h('small', {}, desc))))));
+    const opts = [[0, 'target', 'Übungspuppe', 'Greift nicht an – zum Üben der Formen'], [1, 'sprout', 'Leicht', 'Wirkt langsam und patzt oft'], [2, 'flame', 'Mittel', 'Nutzt Schilde, Heilung und Kombos'], [3, 'skull', 'Schwer', 'Schnell, präzise, gnadenlos']];
+    const m = this.modal(h('div', {}, h('h3', {}, 'Training'), h('p', { class: 'mut' }, 'Kein Risiko – etwas Erfahrung, aber keine Trophäen.'), ...opts.map(([lv, ic, name, desc]) => h('button', { class: 'opt pn', onclick: () => { m.close(); this.startTrain(lv); } }, h('span', { class: 'oi' }, ico(ic)), h('div', {}, h('b', {}, name), h('small', {}, desc))))));
   }
   startTrain(level) { unlock(); if (!this.store.deckOk()) return this.toast('Dein Deck braucht mindestens 3 Zauber'); this.root.hidden = true; this.hero.stop(); this.battle.play(this.profile(), { mode: 'train', level }); }
   claimDaily() {
-    const r = this.store.claimDaily(); if (!r) return; sfx.coin();
-    this.toast(`+${r.coins} 🪙 · Serie ${r.streak}/7${r.pack ? ' · Gratis-Paket!' : ''}`); this.refresh();
+    const r = this.store.claimDaily(); if (!r) return; sfx.coin(); coinFall(12);
+    this.toast(`+${r.coins} {coin} · Serie ${r.streak}/7${r.pack ? ' · Gratis-Paket!' : ''}`); this.refresh();
   }
 
   // ---- Ergebnis nach dem Kampf
@@ -174,15 +198,16 @@ export class App {
     const out = this.store.applyResult(res);
     if (out.practice) { el.append(h('p', { class: 'mut' }, 'Übungskampf – keine Belohnung.')); return; }
     const chips = [];
-    if (out.trophies) chips.push(h('span', { class: out.trophies > 0 ? 'up' : 'down' }, `🏆 ${out.trophies > 0 ? '+' : ''}${out.trophies}`));
-    if (out.coins) chips.push(h('span', { class: 'gold' }, `🪙 +${out.coins}`));
-    if (out.xp) chips.push(h('span', {}, `✨ +${out.xp} XP`));
-    if (out.pack) chips.push(h('span', { class: 'gold' }, '📦 Gratis-Paket'));
+    if (out.trophies) chips.push(h('span', { class: out.trophies > 0 ? 'up' : 'down' }, rich(`{trophy} ${out.trophies > 0 ? '+' : ''}${out.trophies}`)));
+    if (out.coins) chips.push(h('span', { class: 'gold' }, rich(`{coin} +${out.coins}`)));
+    if (out.xp) chips.push(h('span', {}, rich(`{star} +${out.xp} XP`)));
+    if (out.pack) chips.push(h('span', { class: 'gold' }, rich('{pack} Gratis-Paket')));
     el.append(h('div', { class: 'rw' }, ...chips));
-    for (const u of out.ups) { el.append(h('div', { class: 'lvlup' }, `⭐ Stufe ${u.lvl}! +${u.coins} 🪙${u.pack ? ' · Gratis-Paket' : ''}${u.slot ? ' · neuer Deck-Platz!' : ''}`)); }
+    if (out.coins > 0) setTimeout(() => coinFall(Math.min(24, 6 + Math.round(out.coins / 6))), 500);
+    for (const u of out.ups) { el.append(h('div', { class: 'lvlup' }, rich(`{star} Stufe ${u.lvl}! +${u.coins} {coin}${u.pack ? ' · Gratis-Paket' : ''}${u.slot ? ' · neuer Deck-Platz!' : ''}`))); }
     if (out.ups.length) setTimeout(() => sfx.levelUp(), 600);
-    if (out.rankUp) el.append(h('div', { class: 'lvlup' }, `${out.rank.icon} Neuer Rang: ${out.rank.name}!`));
-    for (const q of out.questsDone) el.append(h('div', { class: 'rw' }, h('span', { class: 'gold' }, `🎯 Aufgabe erledigt: ${q}`)));
+    if (out.rankUp) el.append(h('div', { class: 'lvlup' }, rankBadge(out.rank.idx, out.rank.color, 30), ` Neuer Rang: ${out.rank.name}!`));
+    for (const q of out.questsDone) el.append(h('div', { class: 'rw' }, h('span', { class: 'gold' }, rich(`{scroll} Aufgabe erledigt: ${q}`))));
     this.refreshHeader();
   }
 
@@ -192,11 +217,11 @@ export class App {
     const deckRow = h('div', { class: 'deckrow' });
     for (let i = 0; i < 8; i++) {
       const id = d.deck[i];
-      if (id) { const sp = SPELL_BY_ID[id]; deckRow.append(h('button', { class: 'dslot', style: `--c:${RARITIES[sp.rarity].color}`, onclick: () => this.detail(id) }, icon(sp, 72), h('small', {}, sp.name))); }
-      else if (i < slots) deckRow.append(h('div', { class: 'dslot empty' }, '+'));
-      else deckRow.append(h('div', { class: 'dslot lock' }, h('span', {}, '🔒'), h('small', {}, i === 6 ? 'Stufe 5' : 'Stufe 10')));
+      if (id) { const sp = SPELL_BY_ID[id]; deckRow.append(h('button', { class: 'dslot pn', style: `--c:${RARITIES[sp.rarity].color}`, onclick: () => this.detail(id) }, icon(sp, 72), h('small', {}, sp.name))); }
+      else if (i < slots) deckRow.append(h('div', { class: 'dslot pn empty' }, ico('plus')));
+      else deckRow.append(h('div', { class: 'dslot pn lock' }, ico('lock'), h('small', {}, i === 6 ? 'Stufe 5' : 'Stufe 10')));
     }
-    const head = h('div', { class: 'deckbox' }, h('div', { class: 'dh' }, h('b', {}, 'Dein Deck'), h('small', {}, `${d.deck.length}/${slots} · Tippe für Details`)), deckRow);
+    const head = h('div', { class: 'deckbox pn' }, h('div', { class: 'dh' }, h('b', {}, 'Dein Deck'), h('small', {}, `${d.deck.length}/${slots} · Tippe für Details`)), deckRow);
     const filters = [['all', 'Alle'], ['deck', 'Im Deck'], ...RARITY_ORDER.map((r) => [r, rarName(r)])];
     const bar = h('div', { class: 'chips' }, ...filters.map(([k, label]) => h('button', { class: 'chip2' + (this.filter === k ? ' on' : ''), style: RARITIES[k] ? `--c:${RARITIES[k].color}` : '', onclick: () => { sfx.click(); this.filter = k; this.show('spells'); } }, label)));
     const list = SPELLS.filter((s) => this.filter === 'all' || (this.filter === 'deck' ? st.inDeck(s.id) : s.rarity === this.filter));
@@ -205,26 +230,25 @@ export class App {
   }
   card(sp) {
     const st = this.store, own = st.owned(sp.id), lv = st.spellLevel(sp.id), nx = st.nextCopies(sp.id), c = st.copies(sp.id);
-    const prevNeed = lv > 0 ? LEVEL_COPIES[lv - 1] : 0;
-    const frac = nx ? (c - prevNeed) / (nx - prevNeed) : 1;
-    const b = h('button', { class: 'card' + (own ? '' : ' locked') + (st.inDeck(sp.id) ? ' indeck' : ''), style: `--c:${RARITIES[sp.rarity].color};--g:${sp.color}`, onclick: () => { sfx.click(); this.detail(sp.id); } },
-      icon(sp, 112), h('b', {}, own ? sp.name : '???'), own ? h('div', { class: 'cb' }, h('i', { style: `transform:scaleX(${frac})` })) : h('small', {}, rarName(sp.rarity)),
-      own ? h('em', { class: 'lvb' }, lv >= MAX_LEVEL ? 'MAX' : `Lv ${lv}`) : null, own ? h('span', { class: 'cc' }, nx ? `${c}/${nx}` : `${c}`) : h('span', { class: 'lk' }, '🔒'), st.inDeck(sp.id) ? h('span', { class: 'dk' }, '✓') : null);
-    return b;
+    const gems = h('div', { class: 'gems' }, ...Array.from({ length: RARITY_ORDER.indexOf(sp.rarity) + 1 }, () => h('i')));
+    const pips = h('div', { class: 'cb' }, ...Array.from({ length: MAX_LEVEL }, (_, i) => h('i', { class: i < lv ? 'f' : '' })));
+    return h('button', { class: `card pn r-${sp.rarity}` + (own ? '' : ' locked') + (st.inDeck(sp.id) ? ' indeck' : ''), style: `--c:${RARITIES[sp.rarity].color};--g:${sp.color}`, onclick: () => { sfx.click(); this.detail(sp.id); } },
+      gems, h('div', { class: 'art' }, icon(sp, 112)), h('b', {}, own ? sp.name : '???'), own ? pips : h('small', {}, rarName(sp.rarity)),
+      own ? h('em', { class: 'lvb' }, lv >= MAX_LEVEL ? 'MAX' : `Lv ${lv}`) : null, own ? h('span', { class: 'cc' }, nx ? `${c}/${nx}` : `${c}`) : h('span', { class: 'lk' }, ico('lock')), st.inDeck(sp.id) ? h('span', { class: 'dk' }, ico('check')) : null);
   }
   detail(id) {
     const st = this.store, sp = SPELL_BY_ID[id], own = st.owned(id), lv = Math.max(1, st.spellLevel(id)), R = RARITIES[sp.rarity];
     const stars = RARITY_ORDER.indexOf(sp.rarity) + 1;
-    const parts = describeParts(sp, lv).map((p) => h('li', {}, h('span', {}, p.i), p.t));
+    const parts = describeParts(sp, lv).map((p) => h('li', {}, emojiIco(p.i), p.t));
     const nx = st.nextCopies(id), c = st.copies(id);
     const body = h('div', { class: 'det', style: `--c:${R.color};--g:${sp.color}` },
-      h('div', { class: 'dt' }, h('div', { class: 'big' }, icon(sp, 200)), h('div', { class: 'dn' }, h('small', { style: `color:${R.color}` }, rarName(sp.rarity).toUpperCase() + ' · ' + ROLE_ICON[roleOf(sp)] + '\uFE0F'), h('h3', {}, sp.name), h('div', { class: 'diff' }, 'Schwierigkeit ', h('b', {}, h('span', {}, '★'.repeat(stars)), h('span', { style: 'opacity:.25' }, '★'.repeat(5 - stars))), h('small', {}, `Genauigkeit ab ${Math.round(spellThr(sp) * 100)} %`)))),
+      h('div', { class: 'dt' }, h('div', { class: 'big pn' }, icon(sp, 200)), h('div', { class: 'dn' }, h('small', { style: `color:${R.color}` }, rarName(sp.rarity).toUpperCase() + ' · ', emojiIco(ROLE_ICON[roleOf(sp)])), h('h3', {}, sp.name), h('div', { class: 'diff' }, 'Schwierigkeit ', h('b', {}, h('span', {}, '★'.repeat(stars)), h('span', { style: 'opacity:.25' }, '★'.repeat(5 - stars))), h('small', {}, `Genauigkeit ab ${Math.round(spellThr(sp) * 100)} %`)))),
       h('p', { class: 'lore' }, sp.lore),
-      h('div', { class: 'stats3' }, h('div', {}, h('b', {}, `💧 ${sp.cost}`), h('small', {}, 'Mana')), h('div', {}, h('b', {}, `⏱ ${sp.cd} s`), h('small', {}, 'Abklingzeit')), h('div', {}, h('b', {}, sp.travel == null ? 'sofort' : `${sp.travel} s`), h('small', {}, 'Flugzeit'))),
+      h('div', { class: 'stats3' }, h('div', { class: 'pn' }, h('b', {}, ico('drop'), sp.cost), h('small', {}, 'Mana')), h('div', { class: 'pn' }, h('b', {}, ico('clock'), `${sp.cd} s`), h('small', {}, 'Abklingzeit')), h('div', { class: 'pn' }, h('b', {}, ico('wind'), sp.travel == null ? 'sofort' : `${sp.travel} s`), h('small', {}, 'Flugzeit'))),
       h('ul', { class: 'parts' }, ...parts),
-      own ? h('div', { class: 'lvbox' }, h('div', {}, `Stufe ${lv}${lv >= MAX_LEVEL ? ' (MAX)' : ''} · ${c} Kopien`), nx ? h('small', {}, `Noch ${nx - c} Kopie${nx - c === 1 ? '' : 'n'} bis Stufe ${lv + 1} (+7 % Stärke)`) : h('small', {}, 'Höchste Stufe erreicht')) : h('div', { class: 'lvbox' }, h('div', {}, '🔒 Noch nicht freigeschaltet'), h('small', {}, 'Öffne Zauberpakete im Shop, um ihn zu bekommen.')),
+      own ? h('div', { class: 'lvbox' }, h('div', {}, `Stufe ${lv}${lv >= MAX_LEVEL ? ' (MAX)' : ''} · ${c} Kopien`), nx ? h('small', {}, `Noch ${nx - c} Kopie${nx - c === 1 ? '' : 'n'} bis Stufe ${lv + 1} (+7 % Stärke)`) : h('small', {}, 'Höchste Stufe erreicht')) : h('div', { class: 'lvbox' }, h('div', {}, ico('lock'), ' Noch nicht freigeschaltet'), h('small', {}, 'Öffne Zauberpakete im Shop, um ihn zu bekommen.')),
       h('div', { class: 'row' },
-        h('button', { class: 'btn ghost', onclick: () => { m.close(); this.practice(id); } }, '🎯 Üben'),
+        h('button', { class: 'btn ghost', onclick: () => { m.close(); this.practice(id); } }, ico('target'), 'Üben'),
         own ? (st.inDeck(id) ? h('button', { class: 'btn red', onclick: () => { if (!st.removeFromDeck(id)) this.toast('Mindestens 3 Zauber im Deck'); else sfx.back(); m.close(); this.show('spells'); } }, 'Aus Deck') : h('button', { class: 'btn', onclick: () => this.addDeck(id, m) }, 'Ins Deck')) : h('button', { class: 'btn', onclick: () => { m.close(); this.show('shop'); } }, 'Zum Shop')));
     const m = this.modal(body, { cls: 'detm' });
   }
@@ -233,7 +257,7 @@ export class App {
     if (st.addToDeck(id)) { sfx.good(); m.close(); this.show('spells'); return; }
     // Deck voll: Ersatz wählen
     m.close();
-    const pick = this.modal(h('div', {}, h('h3', {}, 'Welchen Zauber ersetzen?'), h('div', { class: 'grid small' }, ...st.d.deck.map((rid) => { const sp = SPELL_BY_ID[rid]; return h('button', { class: 'card', style: `--c:${RARITIES[sp.rarity].color}`, onclick: () => { st.addToDeck(id, rid); sfx.good(); pick.close(); this.show('spells'); } }, icon(sp, 80), h('b', {}, sp.name)); }))));
+    const pick = this.modal(h('div', {}, h('h3', {}, 'Welchen Zauber ersetzen?'), h('div', { class: 'grid small' }, ...st.d.deck.map((rid) => { const sp = SPELL_BY_ID[rid]; return h('button', { class: `card pn r-${sp.rarity}`, style: `--c:${RARITIES[sp.rarity].color};--g:${sp.color}`, onclick: () => { st.addToDeck(id, rid); sfx.good(); pick.close(); this.show('spells'); } }, h('div', { class: 'art' }, icon(sp, 80)), h('b', {}, sp.name)); }))));
   }
   practice(id) {
     unlock(); const st = this.store, own = st.owned(id), sp = SPELL_BY_ID[id];
@@ -248,29 +272,29 @@ export class App {
   sShop(el) {
     const st = this.store, d = st.d;
     this.shopTab = this.shopTab || 'packs';
-    const seg = h('div', { class: 'seg' }, ...[['packs', '🎁 Pakete'], ['skins', '🧙 Garderobe']].map(([k, l]) => h('button', { class: this.shopTab === k ? 'on' : '', onclick: () => { sfx.click(); this.shopTab = k; this.show('shop'); } }, l)));
+    const seg = h('div', { class: 'seg' }, ...[['packs', 'gift', 'Pakete'], ['skins', 'crown', 'Garderobe']].map(([k, ic, l]) => h('button', { class: this.shopTab === k ? 'on' : '', onclick: () => { sfx.click(); this.shopTab = k; this.show('shop'); } }, ico(ic), l)));
     const box = h('div', { class: 'pad' }, seg);
     if (this.shopTab === 'packs') {
-      if (d.freePacks > 0) box.append(h('button', { class: 'gift pack', onclick: () => this.openPack('basic', true) }, h('span', {}, '📦'), h('div', {}, h('b', {}, `${d.freePacks}× Gratis-Paket`), h('small', {}, 'Tippe zum Öffnen'))));
+      if (d.freePacks > 0) box.append(h('button', { class: 'gift pack pn', onclick: () => this.openPack('basic', true) }, ico('pack'), h('div', {}, h('b', {}, `${d.freePacks}× Gratis-Paket`), h('small', {}, 'Tippe zum Öffnen'))));
       for (const P of Object.values(PACKS)) {
         const can = d.coins >= P.price;
-        box.append(h('div', { class: 'pack-t ' + P.id, style: `--c:${P.color}` },
-          h('div', { class: 'pk', 'aria-hidden': true }, h('span', {}, P.id === 'basic' ? '✨' : '👑')),
-          h('div', { class: 'pi' }, h('b', {}, P.name), h('small', {}, `${P.cards} Zauber · mindestens ${P.id === 'basic' ? '1 Seltener' : '1 Epischer'}`), h('button', { class: 'btn' + (can ? '' : ' dis'), onclick: () => can ? this.openPack(P.id, false) : this.toast('Nicht genug Münzen – kämpfe oder erledige Aufgaben'), }, `🪙 ${P.price}`))));
+        box.append(h('div', { class: 'pack-t pn ' + P.id, style: `--c:${P.color}` },
+          h('div', { class: 'pk', 'aria-hidden': true }, ico(P.id === 'basic' ? 'sparkle' : 'crown')),
+          h('div', { class: 'pi' }, h('b', {}, P.name), h('small', {}, `${P.cards} Zauber · mindestens ${P.id === 'basic' ? '1 Seltener' : '1 Epischer'}`), h('button', { class: 'btn price' + (can ? '' : ' dis'), onclick: () => can ? this.openPack(P.id, false) : this.toast('Nicht genug Münzen – kämpfe oder erledige Aufgaben') }, ico('coin'), P.price))));
       }
-      box.append(h('button', { class: 'linkbtn', onclick: () => this.oddsInfo() }, 'ⓘ Wahrscheinlichkeiten anzeigen'));
+      box.append(h('button', { class: 'linkbtn', onclick: () => this.oddsInfo() }, ico('info'), 'Wahrscheinlichkeiten anzeigen'));
       const pity = d.pity; box.append(h('p', { class: 'mut c' }, `Pech-Schutz: garantiert Legendär nach höchstens 35 Paketen ohne (aktuell ${pity.legendary}), Mythisch nach 120 (aktuell ${pity.mythic}).`));
     } else {
       const grid = h('div', { class: 'skins' });
       for (const s of SKINS) {
         const own = st.skinUnlocked(s) || s.how === 'free', avail = st.skinAvailable(s), worn = d.skin === s.id;
-        const cv = h('canvas', { width: 80, height: 80 }); drawAvatar(cv, { robe: s.robe, trim: s.trim, hat: s.hat }, 80);
+        const cv = h('canvas', { width: 84, height: 84 }); drawAvatar(cv, { robe: s.robe, trim: s.trim, hat: s.hat }, 84);
         let act;
-        if (worn) act = h('span', { class: 'worn' }, 'Getragen');
+        if (worn) act = h('span', { class: 'worn' }, ico('check'), 'Getragen');
         else if (own || avail) act = h('button', { class: 'btn sm', onclick: () => { st.wear(s.id); sfx.good(); this.show('shop'); } }, 'Anziehen');
-        else if (s.how === 'coins') act = h('button', { class: 'btn sm' + (d.coins >= s.price ? '' : ' dis'), onclick: () => { if (st.buySkin(s.id)) { st.wear(s.id); sfx.coin(); this.show('shop'); } else this.toast('Nicht genug Münzen'); } }, `🪙 ${s.price}`);
-        else act = h('small', { class: 'lockt' }, s.how === 'level' ? `🔒 Stufe ${s.level}` : `🔒 ${s.trophies} 🏆`);
-        grid.append(h('div', { class: 'skin' + (worn ? ' worn' : '') }, cv, h('b', {}, s.name), act));
+        else if (s.how === 'coins') act = h('button', { class: 'btn sm price' + (d.coins >= s.price ? '' : ' dis'), onclick: () => { if (st.buySkin(s.id)) { st.wear(s.id); sfx.coin(); this.show('shop'); } else this.toast('Nicht genug Münzen'); } }, ico('coin'), s.price);
+        else act = h('small', { class: 'lockt' }, ico('lock'), s.how === 'level' ? `Stufe ${s.level}` : h('span', {}, s.trophies, ' ', ico('trophy')));
+        grid.append(h('div', { class: 'skin pn' + (worn ? ' worn' : '') }, cv, h('b', {}, s.name), act));
       }
       box.append(grid);
     }
@@ -297,18 +321,18 @@ export class App {
     const st = this.store, d = st.d; st.ensureQuests();
     const li = levelInfo(d.xp), box = h('div', { class: 'pad' });
     const nextSlot = li.lvl < 5 ? 5 : li.lvl < 10 ? 10 : null;
-    box.append(h('div', { class: 'lvcard' }, h('div', { class: 'lvn' }, li.lvl), h('div', { class: 'lvi' }, h('b', {}, `Stufe ${li.lvl}`), h('div', { class: 'xpb big' }, h('i', { style: `transform:scaleX(${li.into / li.need})` })), h('small', {}, `${li.into}/${li.need} XP · nächste Belohnung: ${levelReward(li.lvl + 1).coins} 🪙${(li.lvl + 1) % 3 === 0 ? ' + Paket' : ''}${nextSlot ? ` · Deck-Platz bei Stufe ${nextSlot}` : ''}`))));
-    if (st.dailyReady()) box.append(h('button', { class: 'gift', onclick: () => this.claimDaily() }, h('span', {}, '🎁'), h('div', {}, h('b', {}, 'Tagesgeschenk'), h('small', {}, `Tag ${Math.min(7, d.daily.streak + 1)}/7 – Serie bringt mehr!`))));
-    else box.append(h('div', { class: 'gift done' }, h('span', {}, '✅'), h('div', {}, h('b', {}, 'Tagesgeschenk abgeholt'), h('small', {}, `Serie: ${d.daily.streak}/7 · Morgen wieder!`))));
+    box.append(h('div', { class: 'lvcard pn' }, h('div', { class: 'lvn' }, li.lvl), h('div', { class: 'lvi' }, h('b', {}, `Stufe ${li.lvl}`), h('div', { class: 'xpb' }, h('i', { style: `transform:scaleX(${li.into / li.need})` })), h('small', {}, rich(`${li.into}/${li.need} XP · nächste Belohnung: ${levelReward(li.lvl + 1).coins} {coin}${(li.lvl + 1) % 3 === 0 ? ' + Paket' : ''}${nextSlot ? ` · Deck-Platz bei Stufe ${nextSlot}` : ''}`)))));
+    if (st.dailyReady()) box.append(h('button', { class: 'gift pn', onclick: () => this.claimDaily() }, ico('gift'), h('div', {}, h('b', {}, 'Tagesgeschenk'), h('small', {}, `Tag ${Math.min(7, d.daily.streak + 1)}/7 – Serie bringt mehr!`))));
+    else box.append(h('div', { class: 'gift done pn' }, ico('check'), h('div', {}, h('b', {}, 'Tagesgeschenk abgeholt'), h('small', {}, `Serie: ${d.daily.streak}/7 · Morgen wieder!`))));
     box.append(h('h4', {}, 'Tagesaufgaben'));
     d.quests.list.forEach((q, i) => {
       const done = st.questDone(q);
-      box.append(h('div', { class: 'quest' + (q.claimed ? ' claimed' : '') }, h('div', { class: 'qi' }, h('b', {}, q.text), h('div', { class: 'qb' }, h('i', { style: `transform:scaleX(${q.prog / q.goal})` })), h('small', {}, `${Math.min(q.prog, q.goal)}/${q.goal}`)),
-        q.claimed ? h('span', { class: 'ck' }, '✓') : h('button', { class: 'btn sm' + (done ? '' : ' dis'), onclick: () => { if (!done) return; const r = st.claimQuest(i); sfx.coin(); this.toast(`+${r} 🪙`); this.show('quests'); } }, `🪙 ${q.reward}`)));
+      box.append(h('div', { class: 'quest pn' + (q.claimed ? ' claimed' : '') }, h('div', { class: 'qi' }, h('b', {}, q.text), h('div', { class: 'qb' }, h('i', { style: `transform:scaleX(${q.prog / q.goal})` })), h('small', {}, `${Math.min(q.prog, q.goal)}/${q.goal}`)),
+        q.claimed ? h('span', { class: 'ck' }, ico('check')) : h('button', { class: 'btn sm price' + (done ? ' shine' : ' dis'), onclick: () => { if (!done) return; const r = st.claimQuest(i); sfx.coin(); coinFall(8); this.toast(`+${r} {coin}`); this.show('quests'); } }, ico('coin'), q.reward)));
     });
     box.append(h('h4', {}, 'Ränge'));
     const cur = st.rank.idx;
-    box.append(h('div', { class: 'ranks' }, ...RANKS.map((r, i) => h('div', { class: 'rk' + (i === cur ? ' cur' : i < cur ? ' past' : ''), style: `--c:${r.color}` }, h('span', {}, r.icon), h('b', {}, r.name), h('small', {}, `ab ${r.min} 🏆`)))));
+    box.append(h('div', { class: 'ranks' }, ...RANKS.map((r, i) => h('div', { class: 'rk pn' + (i === cur ? ' cur' : i < cur ? ' past' : ''), style: `--c:${r.color}` }, rankBadge(i, r.color, 34), h('b', {}, r.name), h('small', {}, `ab ${r.min}`, ico('trophy'))))));
     el.append(box);
   }
 
@@ -317,24 +341,37 @@ export class App {
     const st = this.store, d = st.d, s = d.settings, box = h('div', { class: 'pad' });
     const nameIn = h('input', { class: 'inp', maxlength: 14, value: d.name, placeholder: 'Dein Name' });
     nameIn.onchange = () => { st.setName(nameIn.value); nameIn.value = st.d.name; this.toast('Name gespeichert'); };
-    box.append(h('h4', {}, 'Profil'), h('div', { class: 'card2' }, h('label', {}, 'Name'), nameIn));
+    box.append(h('h4', {}, 'Profil'), h('div', { class: 'card2 pn' }, h('label', {}, 'Name'), nameIn));
     const tot = d.stats.wins + d.stats.losses + d.stats.draws;
-    box.append(h('div', { class: 'stg' }, ...[['🏆', d.trophies, 'Trophäen'], ['👑', d.bestTrophies, 'Bestwert'], ['✅', d.stats.wins, 'Siege'], ['📊', tot ? Math.round(100 * d.stats.wins / tot) + ' %' : '–', 'Siegquote'], ['🔥', d.stats.bestStreak, 'Beste Serie'], ['📖', `${st.ownedCount()}/${SPELLS.length}`, 'Zauber'], ['🎁', d.stats.packs, 'Pakete'], ['✨', d.stats.casts, 'Zauber gewirkt']].map(([i, v, l]) => h('div', {}, h('span', {}, i), h('b', {}, v), h('small', {}, l)))));
+    box.append(h('div', { class: 'stg' }, ...[['trophy', d.trophies, 'Trophäen'], ['crown', d.bestTrophies, 'Bestwert'], ['check', d.stats.wins, 'Siege'], ['bolt', tot ? Math.round(100 * d.stats.wins / tot) + ' %' : '–', 'Siegquote'], ['flame', d.stats.bestStreak, 'Beste Serie'], ['book', `${st.ownedCount()}/${SPELLS.length}`, 'Zauber'], ['pack', d.stats.packs, 'Pakete'], ['sparkle', d.stats.casts, 'Zauber gewirkt']].map(([i, v, l]) => h('div', { class: 'pn' }, ico(i), h('b', {}, v), h('small', {}, l)))));
     box.append(h('h4', {}, 'Einstellungen'));
-    const tog = (label, key, after) => h('button', { class: 'tg' + (s[key] ? ' on' : ''), onclick: () => { s[key] = !s[key]; st.save(); this.applyAudio(); sfx.click(); this.show('more'); } }, h('span', {}, label), h('i', {}));
+    const tog = (label, key) => h('button', { class: 'tg' + (s[key] ? ' on' : ''), onclick: () => { s[key] = !s[key]; st.save(); this.applyAudio(); sfx.click(); this.show('more'); } }, h('span', {}, label), h('i'));
     const vol = h('input', { type: 'range', min: 0, max: 100, value: Math.round(s.volume * 100), class: 'rng', oninput: () => { s.volume = vol.value / 100; audio.setVolume(s.volume); }, onchange: () => { st.save(); sfx.click(); } });
-    box.append(h('div', { class: 'card2' }, tog('Soundeffekte', 'sound'), tog('Musik', 'music'), h('div', { class: 'vr' }, h('span', {}, 'Lautstärke'), vol)));
-    box.append(h('button', { class: 'btn ghost block', onclick: () => { this.startTutorial(); } }, '🎓 Tutorial wiederholen'));
-    box.append(h('button', { class: 'btn ghost block red', onclick: () => this.confirm('Wirklich ALLES löschen? Zauber, Münzen und Fortschritt sind dann weg.', () => { st.reset(); this.hero.size(); this.refresh(); this.toast('Zurückgesetzt'); }, 'Löschen') }, '🗑 Fortschritt zurücksetzen'));
-    box.append(h('p', { class: 'mut c' }, 'Spells · Version 2 · Dein Fortschritt liegt lokal in diesem Browser.'));
+    box.append(h('div', { class: 'card2 pn' }, tog('Soundeffekte', 'sound'), tog('Musik', 'music'), h('div', { class: 'vr' }, h('span', {}, 'Lautstärke'), vol), tog('Vibration', 'vibe'), tog('Weniger Effekte (für ältere Handys)', 'fxLow')));
+    box.append(h('button', { class: 'btn ghost block', onclick: () => this.startTutorial() }, ico('graduation'), 'Tutorial wiederholen'));
+    box.append(h('h4', {}, 'Fortschritt sichern'), h('div', { class: 'row' },
+      h('button', { class: 'btn ghost sm', onclick: () => this.exportDlg() }, 'Code anzeigen'), h('button', { class: 'btn ghost sm', onclick: () => this.importDlg() }, 'Code einlesen')),
+      h('p', { class: 'mut' }, 'Der Spielstand liegt nur in diesem Browser. Mit dem Code kannst du ihn sichern oder auf ein anderes Gerät mitnehmen.'));
+    box.append(h('button', { class: 'btn ghost block red', onclick: () => this.confirm('Wirklich ALLES löschen? Zauber, Münzen und Fortschritt sind dann weg.', () => { st.reset(); this.hero.size(); this.refresh(); this.toast('Zurückgesetzt'); }, 'Löschen') }, ico('trash'), 'Fortschritt zurücksetzen'));
+    box.append(h('p', { class: 'mut c' }, 'Spells · Version 3'));
     el.append(box);
+  }
+  exportDlg() {
+    const code = this.store.exportCode();
+    const m = this.modal(h('div', {}, h('h3', {}, 'Dein Fortschritts-Code'), h('p', { class: 'mut' }, 'Kopiere den Text und bewahre ihn sicher auf.'), h('div', { class: 'code' }, code),
+      h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(code); this.toast('Kopiert!'); } catch { this.toast('Bitte den Text von Hand markieren'); } } }, 'Kopieren'))));
+  }
+  importDlg() {
+    const ta = h('textarea', { class: 'inp', rows: 4, placeholder: 'Code hier einfügen (SP2-…)' });
+    const m = this.modal(h('div', {}, h('h3', {}, 'Code einlesen'), h('p', { class: 'mut' }, 'Achtung: Dein aktueller Fortschritt wird ersetzt.'), ta,
+      h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'btn', onclick: () => { if (this.store.importCode(ta.value)) { m.close(); this.toast('Fortschritt geladen!'); this.hero.size(); this.refresh(); } else this.toast('Dieser Code ist ungültig'); } }, 'Laden'))));
   }
 
   // ============================================================ TUTORIAL
   welcome() {
     this.store.d.seen.welcome = true; this.store.save();
     const nameIn = h('input', { class: 'inp', maxlength: 14, value: '', placeholder: 'Wie heißt du, Zauberer?' });
-    const m = this.modal(h('div', { class: 'welcome' }, h('div', { class: 'wl' }, '🪄'), h('h2', {}, 'Willkommen bei Spells!'), h('p', {}, 'Zeichne Formen auf den Bildschirm – dein Zauber wird sofort erkannt und gewirkt. Sammle Zauber, steige im Rang auf und besiege andere Magier.'), nameIn,
+    const m = this.modal(h('div', { class: 'welcome' }, h('div', { class: 'wl' }, ico('wands')), h('h2', {}, 'Willkommen bei Spells!'), h('p', {}, 'Zeichne Formen auf den Bildschirm – dein Zauber wird sofort erkannt und gewirkt. Sammle Zauber, steige im Rang auf und besiege andere Magier.'), nameIn,
       h('button', { class: 'btn big', onclick: () => { if (nameIn.value.trim()) this.store.setName(nameIn.value); m.close(); this.startTutorial(); } }, 'Los geht\'s – kurzes Tutorial'), h('button', { class: 'linkbtn', onclick: () => { if (nameIn.value.trim()) this.store.setName(nameIn.value); m.close(); } }, 'Überspringen')), { close: false });
   }
   startTutorial() {
@@ -351,8 +388,8 @@ export class App {
     this.tut.step = step;
     const skip = () => { b.coach(null); this.tut.step = 9; };
     const T = [
-      ['Zeichne einen <b>Kreis</b> unten ins Feld – das wirkt den <b>Feuerball</b>.<br><small>Die Form siehst du auch auf dem Symbol links in der Leiste.</small>', 'feuerball'],
-      ['Stark! Jeder Zauber kostet <b>💧 Mana</b> und hat eine <b>Abklingzeit</b>. Jetzt ein <b>senkrechter Strich</b> von oben nach unten: <b>Eissplitter</b>.', 'eissplitter'],
+      ['Zeichne einen <b>Kreis</b> irgendwo auf den Bildschirm – das wirkt den <b>Feuerball</b>.<br><small>Die Form siehst du auch auf dem Symbol unten in der Leiste.</small>', 'feuerball'],
+      ['Stark! Jeder Zauber kostet <b>Mana</b> und hat eine <b>Abklingzeit</b>. Jetzt ein <b>senkrechter Strich</b> von oben nach unten: <b>Eissplitter</b>.', 'eissplitter'],
       ['Klasse! Tippe auf ein Symbol in der Leiste, um dir die Form <b>einblenden</b> zu lassen. Besiege nun die Übungspuppe – beide dürfen jederzeit zeichnen!', null],
     ][step];
     if (!T) return;
@@ -371,9 +408,8 @@ function packFlow(app, P, cards, done) {
   const ov = h('div', { class: 'pk-ov' });
   document.body.append(ov);
   const maxR = Math.max(...cards.map((c) => RARITY_ORDER.indexOf(c.rarity)));
-  let idx = 0;
   const stage = h('div', { class: 'pk-stage' }); ov.append(stage);
-  const pack = h('button', { class: 'pk-pack ' + P.id, style: `--c:${P.color}` }, h('span', {}, P.id === 'basic' ? '✨' : '👑'), h('small', {}, 'Tippe zum Öffnen'));
+  const pack = h('button', { class: 'pk-pack ' + P.id, style: `--c:${P.color}` }, ico(P.id === 'basic' ? 'sparkle' : 'crown'), h('small', {}, 'Tippe zum Öffnen'));
   stage.append(pack);
   let opened = false;
   pack.onclick = async () => {
@@ -388,8 +424,8 @@ function packFlow(app, P, cards, done) {
     stage.append(hold, info);
     const els = cards.map((c, i) => {
       const sp = SPELL_BY_ID[c.id], R = RARITIES[c.rarity];
-      const face = h('div', { class: 'face' }, h('small', { class: 'rr', style: `color:${R.color}` }, R.name.toUpperCase()), icon(sp, 200), h('h3', {}, sp.name), c.isNew ? h('span', { class: 'new' }, 'NEU!') : c.refund ? h('span', { class: 'cp' }, `Max-Stufe: +${c.refund} 🪙`) : h('span', { class: 'cp' }, `Kopie ${c.copies}${c.levelUp ? ' · STUFE ' + c.level + '!' : ''}`));
-      const card = h('div', { class: 'pc', style: `--c:${R.color};--g:${sp.color};--i:${i}` }, h('div', { class: 'in' }, h('div', { class: 'back' }, '?'), face));
+      const face = h('div', { class: 'face' }, h('small', { class: 'rr', style: `color:${R.color}` }, R.name.toUpperCase()), icon(sp, 200), h('h3', {}, sp.name), c.isNew ? h('span', { class: 'new' }, 'NEU!') : c.refund ? h('span', { class: 'cp' }, rich(`Max-Stufe: +${c.refund} {coin}`)) : h('span', { class: 'cp' }, `Kopie ${c.copies}${c.levelUp ? ' · STUFE ' + c.level + '!' : ''}`));
+      const card = h('div', { class: 'pc', style: `--c:${R.color};--g:${sp.color};--i:${i}` }, h('div', { class: 'in' }, h('div', { class: 'back' }, ico('sparkle')), face));
       hold.append(card); return card;
     });
     let cur = -1;
@@ -409,10 +445,10 @@ function packFlow(app, P, cards, done) {
     stage.onclick = null; ov.classList.remove('rays');
     stage.innerHTML = '';
     const total = cards.filter((c) => c.refund).reduce((a, c) => a + c.refund, 0);
-    const grid = h('div', { class: 'pk-sum' }, ...cards.map((c) => { const sp = SPELL_BY_ID[c.id]; return h('div', { class: 'sc', style: `--c:${RARITIES[c.rarity].color}` }, icon(sp, 100), h('b', {}, sp.name), c.isNew ? h('em', {}, 'NEU') : h('small', {}, c.levelUp ? `Stufe ${c.level}!` : `×${c.copies}`)); }));
+    const grid = h('div', { class: 'pk-sum' }, ...cards.map((c) => { const sp = SPELL_BY_ID[c.id]; return h('div', { class: 'sc pn', style: `--c:${RARITIES[c.rarity].color}` }, icon(sp, 100), h('b', {}, sp.name), c.isNew ? h('em', {}, 'NEU') : h('small', {}, c.levelUp ? `Stufe ${c.level}!` : `×${c.copies}`)); }));
     const can = app.store.d.coins >= P.price;
-    stage.append(h('h2', {}, 'Deine Beute'), grid, total ? h('p', { class: 'mut' }, `+${total} 🪙 Rückerstattung`) : null,
-      h('div', { class: 'row' }, can ? h('button', { class: 'btn ghost', onclick: () => { close(); app.openPack(P.id, false); } }, `Nochmal · 🪙 ${P.price}`) : null, h('button', { class: 'btn', onclick: () => { close(); } }, 'Fertig')));
+    stage.append(h('h2', {}, 'Deine Beute'), grid, total ? h('p', { class: 'mut' }, rich(`+${total} {coin} Rückerstattung`)) : null,
+      h('div', { class: 'row' }, can ? h('button', { class: 'btn ghost price', onclick: () => { close(); app.openPack(P.id, false); } }, 'Nochmal ', ico('coin'), P.price) : null, h('button', { class: 'btn', onclick: () => { close(); } }, 'Fertig')));
     sfx.good();
   }
   function close() { ov.remove(); done(); }

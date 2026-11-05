@@ -102,6 +102,18 @@ export class Store {
   save() { try { this.storage && this.storage.setItem(SAVE_KEY, JSON.stringify(this.d)); } catch { /* voll/gesperrt */ } this.listeners.forEach((f) => f(this.d)); }
   onChange(f) { this.listeners.push(f); }
   reset() { this.d = fresh(); this.ensureQuests(); this.save(); }
+  // Fortschritts-Code: Spielstand als Text zum Sichern oder Umziehen auf ein anderes Gerät
+  exportCode() { const json = JSON.stringify(this.d); const b = typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(json))) : Buffer.from(json).toString('base64'); return 'SP2-' + b; }
+  importCode(code) {
+    try {
+      const t = String(code).trim().replace(/\s+/g, ''); if (!t.startsWith('SP2-')) return false;
+      const b = t.slice(4); const json = typeof atob === 'function' ? decodeURIComponent(escape(atob(b))) : Buffer.from(b, 'base64').toString();
+      const d = JSON.parse(json); if (!d || d.v !== 2 || typeof d.copies !== 'object' || !Array.isArray(d.deck)) return false;
+      this.d = { ...fresh(), ...d, stats: { ...fresh().stats, ...d.stats }, settings: { ...fresh().settings, ...d.settings }, pity: { ...fresh().pity, ...d.pity } };
+      this.d.deck = this.d.deck.filter((id) => this.d.copies[id] > 0); if (this.d.deck.length < 3) this.d.deck = STARTER.slice();
+      this.ensureQuests(); this.save(); return true;
+    } catch { return false; }
+  }
 
   // ---- Abgeleitetes
   get level() { return levelInfo(this.d.xp).lvl; }

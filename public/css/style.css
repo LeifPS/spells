@@ -29,6 +29,8 @@ canvas{display:block}
 .b-hp .f{background:linear-gradient(#7dff9c,#2fb35a 60%,#1c8a44)}
 .b-side.foe .b-hp .f{background:linear-gradient(#ff9a9a,#e04a5a 60%,#b02840)}
 .b-hp.low .f{animation:pulse .6s infinite alternate}
+.b-hp::after,.b-mbar::after{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1.5px),#000b calc(10% - 1.5px) 10%)}
+.b-hp b,.b-mbar b{z-index:2}
 .b-hp .sh{background:linear-gradient(#bfe0ff,#4a8ee8);opacity:0;mix-blend-mode:screen;height:6px;top:auto;bottom:0}
 .b-hp b{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:800;text-shadow:0 1px 2px #000,0 0 4px #000}
 .b-mn{height:5px;border-radius:3px;background:#0b0b2a;margin-top:3px;overflow:hidden;position:relative}
@@ -53,7 +55,7 @@ canvas{display:block}
 .b-hurt.on{animation:hurt .5s ease-out}
 @keyframes hurt{from{opacity:var(--o,.7)}to{opacity:0}}
 .b-tools{z-index:6;position:absolute;right:8px;bottom:8px;display:flex;gap:6px}
-.b-btn{height:38px;min-width:38px;padding:0 10px;border-radius:19px;background:#0a0826cc;border:1px solid #fff3;font-size:18px;backdrop-filter:blur(4px)}
+.b-btn{height:40px;min-width:40px;padding:0 10px;display:grid;place-items:center;background:#120c3ccc;font-size:20px;backdrop-filter:blur(4px);clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 9px,100% calc(100% - 9px),calc(100% - 9px) 100%,9px 100%,0 calc(100% - 9px),0 9px);box-shadow:inset 0 0 0 1.5px #ffd67855}
 .b-btn.arm{background:#802030cc;font-size:13px;font-weight:700}
 .b-emotes{z-index:6;position:absolute;right:8px;bottom:54px;display:flex;gap:4px;padding:6px;border-radius:22px;background:#0a0826ee;border:1px solid #fff3}
 .b-emotes button{font-size:24px;width:42px;height:42px;border-radius:50%}
@@ -71,7 +73,7 @@ canvas{display:block}
 .slot.nomana .cost{background:#8a2a3a}
 .slot .k{position:absolute;top:2px;left:4px;font-size:9px;opacity:.5;font-weight:700}
 .slot .lv{position:absolute;top:18px;left:3px;font-size:8px;font-weight:800;color:var(--gold);text-shadow:0 1px 2px #000}
-.slot .cdo{position:absolute;inset:0;background:#05041acc;transform-origin:bottom;transform:scaleY(0);pointer-events:none}
+.slot .cdo{position:absolute;inset:0;--f:0;background:conic-gradient(#05041ad9 calc(var(--f)*1turn),transparent 0);pointer-events:none}
 .slot .cdt{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:15px;text-shadow:0 1px 4px #000;pointer-events:none}
 
 .b-manar{flex:0 0 auto;width:100%;max-width:640px;margin:0 auto}
@@ -89,14 +91,12 @@ canvas{display:block}
 
 /* Overlays */
 .b-over{position:absolute;inset:0;display:grid;place-items:center;z-index:8;background:rgba(5,3,22,.74);backdrop-filter:blur(3px)}
-.b-card{width:min(88vw,380px);padding:22px 20px;border-radius:24px;background:linear-gradient(#1b1550,#0c0830);border:1px solid #fff2;text-align:center;box-shadow:0 20px 60px #000a}
+.b-card{--k:18px;width:min(88vw,380px);padding:22px 20px 20px;text-align:center;filter:drop-shadow(0 18px 40px #000b)}
 .b-card h2{margin:10px 0 4px;font-size:22px}
 .b-card p{margin:4px 0;color:var(--mut)}
 .b-spin{width:54px;height:54px;border-radius:50%;margin:0 auto;border:4px solid #fff2;border-top-color:var(--acc);animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.b-big{display:block;width:100%;margin-top:12px;padding:13px;border-radius:16px;font-weight:800;font-size:16px;background:linear-gradient(#5aa0ff,#2c64d8);box-shadow:0 4px 0 #1a3d98,0 8px 20px #0006;text-shadow:0 1px 2px #0006}
-.b-big:active{transform:translateY(3px);box-shadow:0 1px 0 #1a3d98}
-.b-big.ghost{background:#ffffff14;box-shadow:none;border:1px solid #fff3}
+.b-big{margin-top:12px}
 .b-count{background:radial-gradient(ellipse at center,#05031899,#050318dd);flex-direction:column}
 .b-count{display:flex;align-items:center;justify-content:center;gap:12px}
 .b-vs{display:flex;align-items:center;gap:14px}
@@ -111,10 +111,12 @@ canvas{display:block}
 .b-cdn{font-size:72px;font-weight:900;text-shadow:0 0 24px #7fb4ff;min-height:84px}
 .b-cdn.pop{animation:cdpop .5s ease-out}
 @keyframes cdpop{from{transform:scale(1.8);opacity:0}}
-.res h1{margin:0;font-size:38px;letter-spacing:.02em}
-.res.win h1{color:#ffd36a;text-shadow:0 0 22px #ffb52e}
-.res.lose h1{color:#ff7a8a}
-.res.draw h1{color:#bcd}
+.b-card.res{padding-top:0;overflow:hidden}
+.res h1{margin:0 -20px 14px;padding:20px 10px 34px;font:900 34px var(--serif);letter-spacing:.1em;text-transform:uppercase;clip-path:polygon(0 0,100% 0,100% 78%,50% 100%,0 78%);animation:ribbon .6s cubic-bezier(.2,1.3,.4,1) both}
+.res.win h1{background:linear-gradient(#fff2a8,#ffbe3e 55%,#d9820f);color:#4a2602;text-shadow:0 1px 0 #fff8}
+.res.lose h1{background:linear-gradient(#ff8a98,#c8384e 55%,#7a1830);color:#fff;text-shadow:0 2px 4px #0006}
+.res.draw h1{background:linear-gradient(#cfd8ff,#7e8ad0 55%,#4a548f);color:#10143a}
+@keyframes ribbon{from{transform:translateY(-40px) scaleY(.6);opacity:0}}
 .b-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:14px 0 6px}
 .b-stats div{background:#ffffff0e;border-radius:10px;padding:6px 2px}
 .b-stats b{display:block;font-size:15px}

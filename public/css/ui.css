@@ -1,0 +1,64 @@
+/* ===================================================== Design-System: Rune-Stein-UI
+   Formen: abgeschrägte Ecken (Runensteine) statt runder Pillen; Gold = Aktion, Violett = Glas, Ton = Serif. */
+:root{
+  --serif:"Palatino Linotype",Palatino,"Book Antiqua","URW Palladio L","Noto Serif",Georgia,serif;
+  --gold2:#ffe08a; --gold3:#ffb43a; --violet:#8f7bff; --cyan:#5fe0ff;
+  --glass:rgba(30,22,84,.62); --glass2:rgba(16,11,52,.78); --rim:rgba(255,214,120,.28);
+  --cut:10px;
+}
+.ico{width:1.2em;height:1.2em;flex:0 0 auto;vertical-align:-.2em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.ico.i-coin{stroke:none;filter:drop-shadow(0 1px 1px #0008)}
+.ico.i-drop{color:#6cb8ff}.ico.i-trophy{color:#ffd36a}.ico.i-star{color:#ffd36a}.ico.i-heart{color:#ff6a8a}.ico.i-bolt{color:#ffe36a}
+.ico.e-flame{color:#ff8a3a}.ico.e-snow{color:#9ae4ff}.ico.e-skull{color:#9fe08a}.ico.e-heart{color:#ff6a8a}.ico.e-shield{color:#7fb4ff}.ico.e-drop{color:#6cb8ff}.ico.e-sparkle{color:#ffe08a}.ico.e-bolt{color:#ffe36a}.ico.e-sword{color:#ffb0a0}
+
+/* Rang-Wappen */
+.rbadge{display:inline-block;flex:0 0 auto;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--c) 55%,transparent))}
+.rbadge svg{width:100%;height:100%;overflow:visible}
+.rb-bg{fill:var(--c);stroke:#fff8;stroke-width:.8}.rb-in{fill:color-mix(in srgb,var(--c) 22%,#0b0828);stroke:none}
+.rbadge path:not(.rb-bg):not(.rb-in){fill:none;stroke:var(--c);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- Buttons: Rune-Stein mit abgeschrägten Ecken ---------- */
+.btn,.b-big{--k:var(--cut);--hi:#ffe9a0;--mid:#ffbe3e;--lo:#d9820f;--dk:#8a4a06;--ink:#3b1f02;
+  position:relative;isolation:isolate;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:12px 20px 15px;font-family:var(--serif);font-weight:800;font-size:15px;letter-spacing:.035em;color:var(--ink);text-shadow:0 1px 0 #fff6;
+  background:linear-gradient(180deg,var(--hi) 0,var(--mid) 46%,var(--lo) 84%,var(--dk) 84%);
+  clip-path:polygon(var(--k) 0,calc(100% - var(--k)) 0,100% var(--k),100% calc(100% - var(--k)),calc(100% - var(--k)) 100%,var(--k) 100%,0 calc(100% - var(--k)),0 var(--k));
+  transition:transform .08s,filter .15s;border-radius:0;line-height:1.1}
+.btn::before,.b-big::before{content:'';position:absolute;z-index:-1;inset:2px 2px 6px;
+  clip-path:polygon(calc(var(--k) - 2px) 0,calc(100% - var(--k) + 2px) 0,100% calc(var(--k) - 2px),100% calc(100% - var(--k) + 2px),calc(100% - var(--k) + 2px) 100%,calc(var(--k) - 2px) 100%,0 calc(100% - var(--k) + 2px),0 calc(var(--k) - 2px));
+  background:linear-gradient(180deg,#fff7 0,#fff0 55%);pointer-events:none}
+.btn::after,.b-big::after{content:'';position:absolute;z-index:-1;top:0;bottom:0;left:-60%;width:40%;background:linear-gradient(100deg,transparent,#fff8,transparent);transform:skewX(-20deg);animation:sweep 4.5s infinite 1s;opacity:.0;pointer-events:none}
+.btn.shine::after,.b-big.shine::after{opacity:.65}
+@keyframes sweep{0%,60%{left:-60%}100%{left:140%}}
+.btn:active,.b-big:active{transform:translateY(2px);filter:brightness(.94)}
+.btn.sm{padding:8px 14px 11px;font-size:13px;--k:7px}
+.btn.big,.b-big{padding:16px 22px 19px;font-size:18px}
+.btn.block,.b-big{width:100%}
+.btn.ghost,.b-big.ghost{--hi:#4c3fb0;--mid:#352a8c;--lo:#241c66;--dk:#150f42;--ink:#eef0ff;text-shadow:0 1px 2px #0008}
+.btn.ghost::before,.b-big.ghost::before{background:linear-gradient(180deg,#fff3 0,#fff0 50%)}
+.btn.red,.btn.block.red{--hi:#ff8a98;--mid:#e0485e;--lo:#b02842;--dk:#681428;--ink:#fff;text-shadow:0 1px 2px #0007}
+.btn.green{--hi:#a8f0b0;--mid:#4fc268;--lo:#2c8f48;--dk:#166030;--ink:#06260f}
+.btn.dis{filter:grayscale(.85) brightness(.72)}
+.btn .ico{font-size:1.15em}
+.row{display:flex;gap:8px}.row>*{flex:1}
+
+/* Preis-Tag (Münzen) */
+.btn.price .ico.i-coin{font-size:1.3em;margin-right:-1px}
+
+/* Glas-Platten */
+.plate{position:relative;background:var(--glass);border:1px solid var(--rim);border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.chamf{clip-path:polygon(12px 0,calc(100% - 12px) 0,100% 12px,100% calc(100% - 12px),calc(100% - 12px) 100%,12px 100%,0 calc(100% - 12px),0 12px)}
+
+/* Schalter: Rune statt Daumen */
+.tg{display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:700;padding:6px 2px;width:100%;text-align:left}
+.tg span{flex:1}
+.tg i{position:relative;flex:0 0 auto;width:52px;height:28px;background:#0b0828;border:1.5px solid #fff3;clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,9px 100%,0 50%);transition:.2s}
+.tg i::after{content:'';position:absolute;top:4px;left:5px;width:18px;height:18px;background:#6a6ea8;transform:rotate(45deg) scale(.85);transition:.22s cubic-bezier(.3,1.5,.5,1)}
+.tg.on i{background:linear-gradient(90deg,#1c5a3a,#2fb35a);border-color:#8affb0aa}
+.tg.on i::after{left:27px;background:#fff7d0;box-shadow:0 0 10px #ffe08a}
+
+/* Münz-Regen (Belohnung) */
+.coinfall{position:fixed;inset:0;pointer-events:none;z-index:95;overflow:hidden}
+.coinfall .ico{position:absolute;top:-30px;width:26px;height:26px;animation:cfall var(--d,1.6s) cubic-bezier(.4,.1,.6,1) var(--w,0s) forwards;opacity:0}
+@keyframes cfall{0%{opacity:1;transform:translateY(0) rotateY(0)}100%{opacity:1;transform:translateY(105vh) rotateY(720deg)}}
+@media (prefers-reduced-motion:reduce){.coinfall,.btn::after{display:none}}

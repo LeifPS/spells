@@ -8,9 +8,10 @@ import { drawSpellIcon, clamp } from './gfx.js';
 import { sfx, music } from './audio.js';
 import { CFG } from './sim.js';
 import { LocalSource, NetSource } from './net.js';
+import { icoHTML } from './icons.js';
 
 const EMOTES = ['👍', '😂', '😮', '😡', '👏', '🔥'];
-const STATUS_ICONS = { burn: '🔥', poison: '☠️', chill: '❄️', stun: '💫', reflect: '🪞', phase: '👻', haste: '⚡' };
+const STATUS_ICONS = { burn: 'flame', poison: 'skull', chill: 'snow', stun: 'star', reflect: 'mirror', phase: 'ghost', haste: 'bolt' };
 const FIZZLE = { acc: 'Zu ungenau', gcd: 'Noch nicht bereit', cd: 'Noch nicht bereit', mana: 'Zu wenig Mana', stun: 'Betäubt!', deck: 'Nicht im Deck', over: '' };
 const TIPS = ['Tipp: Tippe auf ein Symbol in der Leiste, um dir die Form einblenden zu lassen.', 'Tipp: Du darfst mitten im Kampf jederzeit zeichnen – es gibt keine Runden.', 'Tipp: Schilde und Heilung vor einem großen Zauber aufbauen.', 'Tipp: Seltene Zauber brauchen eine sauberere Form – lieber langsam und deutlich zeichnen.', 'Tipp: Findet sich kein Gegner, kämpfst du nach kurzer Zeit gegen einen Bot.', 'Tipp: Mana regeneriert sich ständig – spare es nicht für ewig.'];
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -31,15 +32,15 @@ export class Battle {
   <div class="b-hint">Zeichne irgendwo auf dem Bildschirm</div>
   <div class="b-callout"></div>
   <div class="b-hurt"></div>
-  <div class="b-tools"><button class="b-btn b-emo" aria-label="Emotes">😊</button><button class="b-btn b-quit" aria-label="Aufgeben">🏳</button></div>
+  <div class="b-tools"><button class="b-btn b-emo" aria-label="Emotes">${icoHTML('smile')}</button><button class="b-btn b-quit" aria-label="Aufgeben">${icoHTML('flag')}</button></div>
   <div class="b-emotes" hidden></div>
-  <div class="b-over b-queue" hidden><div class="b-card"><div class="b-spin"></div><h2>Suche Gegner …</h2><p class="b-qs">Verbinde …</p><p class="b-qt"></p><p class="b-tip"></p><button class="b-big ghost b-qcancel">Abbrechen</button></div></div>
+  <div class="b-over b-queue" hidden><div class="b-card pn"><div class="b-spin"></div><h2>Suche Gegner …</h2><p class="b-qs">Verbinde …</p><p class="b-qt"></p><p class="b-tip"></p><button class="b-big ghost btn b-qcancel">Abbrechen</button></div></div>
   <div class="b-over b-count" hidden><div class="b-vs"><div class="b-vp"><canvas width="96" height="96"></canvas><b></b><small></small></div><div class="b-vsx">VS</div><div class="b-vp"><canvas width="96" height="96"></canvas><b></b><small></small></div></div><div class="b-cdn">3</div></div>
   <div class="b-over b-result" hidden><div class="b-card res"><h1></h1><p class="b-why"></p><div class="b-stats"></div><div class="b-extra"></div><div class="b-rbtns"></div></div></div>
 </div>
 <div class="b-panel">
   <div class="b-deck"></div>
-  <div class="b-manar"><div class="b-mbar"><i class="pre"></i><i class="fill"></i><b></b><span>💧</span></div></div>
+  <div class="b-manar"><div class="b-mbar"><i class="pre"></i><i class="fill"></i><b></b><span>${icoHTML('drop')}</span></div></div>
 </div>
 <canvas class="b-pad"></canvas>`;
     const q = (s) => root.querySelector(s);
@@ -332,8 +333,8 @@ export class Battle {
     for (const i of [0, 1]) {
       const st = this.st[i], root = i === this.you ? this.el.me : this.el.foe, box = root.querySelector('.b-st');
       const parts = [];
-      for (const k of Object.keys(STATUS_ICONS)) if (st[k] > 0) parts.push(`<span class="chip">${STATUS_ICONS[k]}<small>${Math.ceil(st[k])}</small></span>`);
-      if (st.shield > 0) parts.push(`<span class="chip sh">🛡<small>${Math.round(st.shield)}</small></span>`);
+      for (const k of Object.keys(STATUS_ICONS)) if (st[k] > 0) parts.push(`<span class="chip">${icoHTML(STATUS_ICONS[k], 'e-' + STATUS_ICONS[k])}<small>${Math.ceil(st[k])}</small></span>`);
+      if (st.shield > 0) parts.push(`<span class="chip sh">${icoHTML('shield', 'e-shield')}<small>${Math.round(st.shield)}</small></span>`);
       const html = parts.join('');
       if (box._h !== html) { box.innerHTML = html; box._h = html; }
     }
@@ -404,7 +405,7 @@ export class Battle {
       const ready = playing && rem <= CFG.tol && me.mana >= sp.cost && me.stun <= 0;
       const key = `${frac.toFixed(2)}|${ready}|${me.mana >= sp.cost}|${cd > g ? Math.ceil(cd) : 0}`;
       if (o.last === key) continue; o.last = key;
-      o.cdo.style.transform = `scaleY(${frac})`;
+      o.cdo.style.setProperty('--f', frac.toFixed(3));
       o.cdt.textContent = cd > g + 0.2 && cd > 0.3 ? cd.toFixed(cd < 10 ? 1 : 0) : '';
       o.b.classList.toggle('ready', ready);
       o.b.classList.toggle('nomana', me.mana < sp.cost);
@@ -426,7 +427,7 @@ export class Battle {
 
   showResult(res) {
     const el = this.el.result, card = el.querySelector('.res');
-    card.className = 'b-card res ' + (res.draw ? 'draw' : res.won ? 'win' : 'lose');
+    card.className = 'b-card pn res ' + (res.draw ? 'draw' : res.won ? 'win' : 'lose');
     card.querySelector('h1').textContent = res.draw ? 'Unentschieden' : res.won ? 'Sieg!' : 'Niederlage';
     const why = { ko: res.won ? 'Gegner besiegt' : 'Du wurdest besiegt', time: 'Zeit abgelaufen – mehr Leben gewinnt', quit: res.won ? 'Gegner hat aufgegeben' : 'Du hast aufgegeben', left: 'Gegner hat den Kampf verlassen', disconnect: 'Verbindung verloren' }[res.reason] || '';
     card.querySelector('.b-why').textContent = why;
@@ -435,9 +436,9 @@ export class Battle {
     const extra = card.querySelector('.b-extra'); extra.innerHTML = '';
     if (this.hooks.onResult) { try { this.hooks.onResult(res, extra); } catch (e) { console.error(e); } }
     const bt = card.querySelector('.b-rbtns'); bt.innerHTML = '';
-    const again = document.createElement('button'); again.className = 'b-big'; again.textContent = 'Nochmal';
+    const again = document.createElement('button'); again.className = 'btn big block shine'; again.textContent = 'Nochmal';
     again.onclick = () => { sfx.click(); this.play(this.hooks.profile ? this.hooks.profile() : this.profile, this.opts); };
-    const menu = document.createElement('button'); menu.className = 'b-big ghost'; menu.textContent = 'Menü';
+    const menu = document.createElement('button'); menu.className = 'btn big block ghost'; menu.textContent = 'Menü';
     menu.onclick = () => { sfx.back(); this.hide(); music.start('menu'); if (this.hooks.onExit) this.hooks.onExit(res); };
     bt.append(again, menu);
     el.hidden = false;
