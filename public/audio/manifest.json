@@ -1,1 +1,7 @@
-{}
+{
+  "cast_fire": "cast_fire.mp3",
+  "cast_spark": "cast_spark.mp3",
+  "cast_wind": "cast_wind.mp3",
+  "cast_time": "cast_time.mp3",
+  "cast_dark": "cast_dark.mp3"
+}
