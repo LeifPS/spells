@@ -25,8 +25,10 @@ function newPlayer(deck, levels) {
 }
 
 export class Duel {
-  constructor({ decks, levels = [{}, {}], rng = Math.random }) {
+  constructor({ decks, levels = [{}, {}], rng = Math.random, mods = {} }) {
     this.rng = rng;
+    // Regel-Änderungen (Zauberturm): regen/cd/heal = Faktoren, dmg = [Faktor je Spieler], shield0 = [Start-Schild je Spieler]
+    this.mods = { regen: 1, cd: 1, heal: 1, dmg: [1, 1], shield0: [0, 0], ...mods };
     this.p = [newPlayer(decks[0], levels[0]), newPlayer(decks[1], levels[1])];
     this.t = 0;
     this.proj = [];
@@ -35,6 +37,7 @@ export class Duel {
     this.winner = null;
     this.reason = null;
     this.sdAcc = 0;
+    for (let i = 0; i < 2; i++) if (this.mods.shield0[i] > 0) this.addShield(i, this.mods.shield0[i], 15);
   }
 
   drain() { const e = this.ev; this.ev = []; return e; }
@@ -57,7 +60,7 @@ export class Duel {
     const pw = powerFactor(Math.min(1, acc), thr) * levelMul(lvl);
     me.mana -= sp.cost;
     me.gcd = CFG.gcd * (me.chill > 0 ? CFG.chillGcd : 1) * (me.haste > 0 ? CFG.hasteGcd : 1);
-    me.cds[id] = sp.cd * (me.haste > 0 ? CFG.hasteCd : 1);
+    me.cds[id] = sp.cd * this.mods.cd * (me.haste > 0 ? CFG.hasteCd : 1);
     me.stats.casts++; me.stats.accSum += Math.min(1, acc);
     // Glückswurf: ein zufälliger Effekt aus der Liste
     let f = sp.fx, roll = null;
@@ -82,7 +85,7 @@ export class Duel {
 
   // ------------------------------------------------------------ Effekte
   heal(i, amt, src) {
-    const me = this.p[i];
+    const me = this.p[i]; amt = Math.round(amt * this.mods.heal);
     const a = Math.max(0, Math.min(CFG.maxHp - me.hp, amt));
     me.hp += a; me.stats.heal += a;
     if (amt > 0) this.push({ k: 'heal', p: i, amount: a, hp: Math.round(me.hp), src });
@@ -139,7 +142,7 @@ export class Duel {
       if (f.gcdHit) { T.gcd += f.gcdHit; this.push({ k: 'status', p: pr.tgt, type: 'gcd', dur: f.gcdHit }); }
     }
     if (f.dmg) {
-      const amount = Math.max(1, Math.round(f.dmg * pr.pw));
+      const amount = Math.max(1, Math.round(f.dmg * pr.pw * this.mods.dmg[pr.src]));
       const r = this.damage(T, amount, false);
       S.stats.dmg += r.dealt;
       this.push({ k: 'hit', p: pr.tgt, src: pr.src, id: pr.id, n: pr.hitIdx, amount: r.dealt, absorbed: r.absorbed, hp: Math.round(T.hp), shield: Math.round(T.shield) });
@@ -160,7 +163,7 @@ export class Duel {
       const me = this.p[i];
       me.gcd = Math.max(0, me.gcd - dt);
       for (const id in me.cds) if (me.cds[id] > 0) me.cds[id] = Math.max(0, me.cds[id] - dt);
-      const regen = CFG.regen * (me.chill > 0 ? CFG.chillRegen : 1) * (me.haste > 0 ? CFG.hasteRegen : 1);
+      const regen = CFG.regen * this.mods.regen * (me.chill > 0 ? CFG.chillRegen : 1) * (me.haste > 0 ? CFG.hasteRegen : 1);
       me.mana = Math.min(CFG.maxMana, me.mana + regen * dt);
       for (const s of ['chill', 'stun', 'reflect', 'phase', 'haste', 'curse', 'phoenix']) if (me[s] > 0) me[s] = Math.max(0, me[s] - dt);
       if (me.shieldT > 0) { me.shieldT -= dt; if (me.shieldT <= 0 && me.shield > 0) { me.shield = 0; me.shieldT = 0; this.push({ k: 'shield', p: i, amount: 0, total: 0, expired: true }); } }
@@ -172,7 +175,7 @@ export class Duel {
         for (const type of ['burn', 'poison']) {
           const d = me[type];
           if (!d) continue;
-          const amount = Math.max(1, Math.round(d.dps * CFG.dotTick));
+          const amount = Math.max(1, Math.round(d.dps * CFG.dotTick * this.mods.dmg[1 - i]));
           const r = this.damage(me, amount, type === 'poison');
           this.p[1 - i].stats.dmg += r.dealt;
           this.push({ k: 'dot', p: i, type, amount: r.dealt, absorbed: r.absorbed, hp: Math.round(me.hp), shield: Math.round(me.shield) });

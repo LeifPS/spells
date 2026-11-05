@@ -46,6 +46,7 @@ export class Lobby {
   constructor(state, env) {
     this.env = env;
     this.waiting = []; // { ws, pid, name, trophies, since }
+    this.rooms = new Map(); // Code -> { ws, pid, since }  (Freunde-Räume)
     this.timer = null;
   }
 
@@ -60,6 +61,18 @@ export class Lobby {
         send(server, { t: 'queued' });
         this.pairUp();
         this.ensureTimer();
+      } else if (m.t === 'room' && !me) {
+        const code = clean(m.code, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (code.length < 3) { try { server.close(1000, 'code'); } catch {} return; }
+        me = { ws: server, pid: clean(m.pid, 40), name: clean(m.name) || 'Zauberer', room: code, since: Date.now() };
+        const other = this.rooms.get(code);
+        if (other && other.pid !== me.pid) {
+          this.rooms.delete(code);
+          const matchId = this.env.MATCH.newUniqueId().toString();
+          send(other.ws, { t: 'match', matchId, bot: false, friend: true });
+          send(server, { t: 'match', matchId, bot: false, friend: true });
+        } else if (other) { send(server, { t: 'roomfull' }); } // gleicher Spieler zweimal
+        else { this.rooms.set(code, me); send(server, { t: 'queued', room: true }); setTimeout(() => { if (this.rooms.get(code) === me) { this.rooms.delete(code); try { me.ws.close(1000, 'timeout'); } catch {} } }, 10 * 60 * 1000); }
       } else if (m.t === 'cancel') { this.remove(me); try { server.close(1000, 'cancel'); } catch {} }
     });
     const gone = () => this.remove(me);
@@ -70,6 +83,7 @@ export class Lobby {
 
   remove(p) {
     if (!p) return;
+    if (p.room && this.rooms.get(p.room) === p) this.rooms.delete(p.room);
     this.waiting = this.waiting.filter((w) => w !== p);
     if (!this.waiting.length && this.timer) { clearInterval(this.timer); this.timer = null; }
   }

@@ -138,4 +138,27 @@ for (const id of ['steinwall', 'pfeilsalve', 'schwaechefluch', 'schattenschritt'
   for (let i = 0; i < 20 * 150 && !d.over; i++) { botStep(d, 0, b0, 0.05); botStep(d, 1, b1, 0.05); d.step(0.05); }
 }
 
+
+// --- Zauberturm: Regel-Änderungen
+import { FLOORS, MODS, simMods, towerOpts } from '../public/js/tower.js';
+d = new Duel({ decks: [['feuerball'], ['heilfunke']], levels: [{}, {}], mods: simMods({ mod: 'rush' }, 0) });
+d.p[0].mana = 0; run(d, 2); assert.ok(d.p[0].mana > 2 * CFG.regen * 1.9, 'Manaflut: doppelte Regeneration ' + d.p[0].mana);
+d = new Duel({ decks: [['feuerball'], ['blitz']], levels: [{}, {}], mods: simMods({ mod: 'swift' }, 0) });
+d.cast(0, 'feuerball', 0.9); assert.ok(Math.abs(d.p[0].cds.feuerball - 2.0 * 0.6) < 1e-6, 'Zeitschleife verkürzt Abklingzeit');
+d = new Duel({ decks: [['feuerball'], ['heilfunke']], levels: [{}, {}], mods: simMods({ mod: 'wither' }, 0) });
+d.p[1].hp = 100; d.cast(1, 'heilfunke', 0.9); assert.ok(d.p[1].hp < 100 + 26, 'Dürre halbiert Heilung: ' + d.p[1].hp);
+d = new Duel({ decks: [['klingenhieb'], ['klingenhieb']], levels: [{}, {}], mods: simMods({ mod: 'glass' }, 0) });
+d.cast(0, 'klingenhieb', 0.95); run(d, 1); assert.ok(d.p[1].hp <= 200 - Math.round(13 * 0.8 * 1.5), 'Glaskanone erhöht Schaden: ' + d.p[1].hp);
+// Boss: Gegner hat Start-Schild und teilt 20 % mehr aus (Mensch ist Spieler 1 -> Gegner = 0)
+const bm = simMods({ mod: 'boss' }, 1); assert.equal(bm.shield0[0], 80); assert.equal(bm.shield0[1], 0); assert.equal(bm.dmg[0], 1.2);
+d = new Duel({ decks: [['klingenhieb'], ['klingenhieb']], levels: [{}, {}], mods: bm }); assert.equal(d.p[0].shield, 80);
+// Jede Etage ist spielbar: Bot (Stufe der Etage) gegen sich selbst läuft bis zum Ende
+for (const f of FLOORS) {
+  const o = towerOpts(f); assert.ok(o.botDeck.length >= 3, 'Bot-Deck Etage ' + f.n); assert.ok(MODS[f.mod]);
+  d = new Duel({ decks: [o.botDeck, o.botDeck], levels: [botLevels(o.botDeck, f.bot), botLevels(o.botDeck, f.bot)], mods: simMods(f, 1) });
+  const ba = makeBot(f.bot), bb = makeBot(f.bot);
+  for (let i = 0; i < 20 * 160 && !d.over; i++) { botStep(d, 0, ba, 0.05); botStep(d, 1, bb, 0.05); d.step(0.05); }
+  assert.ok(d.over, 'Etage ' + f.n + ' endet');
+}
+
 console.log('Simulation: alle Tests bestanden');

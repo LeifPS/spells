@@ -2,6 +2,7 @@
 import { Duel } from './sim.js';
 import { SPELL_BY_ID, RARITY_ORDER } from './spells.js';
 import { makeBot, botStep, botDeck, botLevels, BOT_LEVELS } from './bot.js';
+import { simMods } from './tower.js';
 
 const THEMES = ['wald', 'vulkan', 'eis', 'tempel'];
 const BOT_NAMES = ['Irrlicht', 'Funkenfee', 'Nebelhexe', 'Mondmagier', 'Kristallgeist', 'Aschenzwerg', 'Sternenwirt', 'Donnerkater'];
@@ -31,10 +32,11 @@ export class LocalSource extends Source {
     const me = { name: pr.name, skin: pr.skin, trophies: pr.trophies, deck: pr.deck, levels: pr.levels, bot: false };
     this.you = o.you ?? (Math.random() < 0.5 ? 0 : 1);
     const list = this.you === 0 ? [me, bot] : [bot, me];
-    this.duel = new Duel({ decks: list.map((p) => p.deck), levels: list.map((p) => p.levels) });
+    this.mods = o.floor ? simMods(o.floor, this.you) : undefined;
+    this.duel = new Duel({ decks: list.map((p) => p.deck), levels: list.map((p) => p.levels), mods: this.mods });
     this.bot = makeBot(level); this.botIdx = 1 - this.you;
     const cd = o.countdown ?? 3.2;
-    this.emit({ t: 'start', you: this.you, players: list.map((p) => ({ name: p.name, skin: p.skin, trophies: p.trophies, bot: p.bot, deck: p.deck })), theme: o.theme || THEMES[Math.floor(Math.random() * THEMES.length)], countdown: cd, levels: list.map((p) => p.levels), local: true, level });
+    this.emit({ t: 'start', you: this.you, players: list.map((p) => ({ name: p.name, skin: p.skin, trophies: p.trophies, bot: p.bot, deck: p.deck })), theme: o.theme || THEMES[Math.floor(Math.random() * THEMES.length)], countdown: cd, levels: list.map((p) => p.levels), local: true, level, mods: this.mods, floor: o.floor ? { n: o.floor.n, name: o.floor.name, mod: o.floor.mod } : undefined });
     this.phase = 'count';
     this.timers.push(setTimeout(() => this.go(), cd * 1000));
   }
@@ -75,7 +77,7 @@ export class LocalSource extends Source {
 }
 
 export class NetSource extends Source {
-  constructor(profile) { super(); this.profile = profile; this.lobby = null; this.match = null; this.timers = []; this.fellBack = false; }
+  constructor(profile, opts = {}) { super(); this.opts = opts; this.profile = profile; this.lobby = null; this.match = null; this.timers = []; this.fellBack = false; }
   wsUrl(path) { return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${path}`; }
   start() {
     this.emit({ t: 'status', text: 'Verbinde …' });
@@ -86,11 +88,12 @@ export class NetSource extends Source {
     this.lobby.onopen = () => {
       opened = true; clearTimeout(to);
       const pr = this.profile;
-      this.lobby.send(JSON.stringify({ t: 'queue', pid: pr.pid, name: pr.name, trophies: pr.trophies }));
+      this.lobby.send(JSON.stringify(this.opts.room ? { t: 'room', code: this.opts.room, pid: pr.pid, name: pr.name } : { t: 'queue', pid: pr.pid, name: pr.name, trophies: pr.trophies }));
     };
     this.lobby.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
-      if (m.t === 'queued') this.emit({ t: 'status', text: 'Suche Gegner …', queued: true });
+      if (m.t === 'queued') this.emit({ t: 'status', text: this.opts.room ? 'Warte auf deinen Freund …' : 'Suche Gegner …', queued: true });
+      else if (m.t === 'roomfull') { this.emit({ t: 'roomfull' }); }
       else if (m.t === 'match') { try { this.lobby.close(); } catch {} this.joinMatch(m.matchId, m.bot); }
     };
     this.lobby.onerror = () => { if (!this.match && !this.fellBack) this.fallback('Keine Verbindung'); };

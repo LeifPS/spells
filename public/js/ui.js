@@ -4,6 +4,7 @@ import { SPELLS, SPELL_BY_ID, RARITIES, RARITY_ORDER, LEVEL_COPIES, MAX_LEVEL, l
 import { drawSpellIcon, glow, TAU, clamp, rgba, rnd, easeOut } from './gfx.js';
 import { renderBackground, drawWizardArt, drawAvatar, THEME_NAMES } from './scene.js';
 import { BOT_LEVELS } from './bot.js';
+import { FLOORS, MODS, towerOpts } from './tower.js';
 import { sfx, music, audio, unlock } from './audio.js';
 import { ico, rich, emojiIco, rankBadge } from './icons.js';
 
@@ -179,8 +180,50 @@ export class App {
   modesMenu() {
     sfx.click();
     const m = this.modal(h('div', {}, h('h3', {}, 'Modi'), h('p', { class: 'mut' }, 'Wähle, wie du spielen möchtest.'),
+      h('button', { class: 'opt pn', onclick: () => { m.close(); this.towerMenu(); } }, h('span', { class: 'oi' }, ico('tower')), h('div', {}, h('b', {}, 'Zauberturm'), h('small', {}, `10 Etagen mit wilden Regeln · bisher Etage ${this.store.d.tower.best}/10`))),
+      h('button', { class: 'opt pn', onclick: () => { m.close(); this.friendMenu(); } }, h('span', { class: 'oi' }, ico('people')), h('div', {}, h('b', {}, 'Freunde-Raum'), h('small', {}, 'Mit einem Code gegen Familie & Freunde – ohne Trophäen'))),
       h('button', { class: 'opt pn', onclick: () => { m.close(); this.trainMenu(); } }, h('span', { class: 'oi' }, ico('target')), h('div', {}, h('b', {}, 'Training'), h('small', {}, 'Gegen Bots üben – ohne Risiko'))),
     ));
+  }
+  // ---- Zauberturm
+  towerMenu() {
+    sfx.click();
+    const best = this.store.d.tower.best || 0;
+    const rows = [...FLOORS].reverse().map((f) => {
+      const cleared = f.n <= best, open = f.n <= best + 1, md = MODS[f.mod] || MODS.none;
+      return h('button', { class: 'floor pn' + (cleared ? ' done' : '') + (f.n === best + 1 ? ' next' : '') + (open ? '' : ' lockd') + (f.boss ? ' boss' : ''), onclick: () => { if (!open) return this.toast(`Bezwinge zuerst Etage ${f.n - 1}`); m.close(); this.startTower(f); } },
+        h('span', { class: 'fn' }, cleared ? ico('check') : open ? String(f.n) : ico('lock')),
+        h('div', { class: 'fi' }, h('b', {}, f.name), h('small', {}, `${f.guard} · `, h('em', {}, md.name)), h('small', { class: 'fr' }, md.desc)),
+        h('span', { class: 'frw' }, ico('coin'), String(f.reward.coins), f.reward.pack ? ico('pack') : null));
+    });
+    const m = this.modal(h('div', { class: 'tower' }, h('h3', {}, 'Zauberturm'), h('p', { class: 'mut' }, 'Steige Etage für Etage nach oben. Jede Etage hat eine eigene Regel – und auf Etage 5 und 10 wartet ein Boss. Belohnungen gibt es für die erste Bezwingung.'), h('div', { class: 'floors' }, ...rows)));
+  }
+  startTower(f) {
+    unlock(); if (!this.store.deckOk()) return this.toast('Dein Deck braucht mindestens 3 Zauber');
+    this.root.hidden = true; this.hero.stop(); this.battle.play(this.profile(), towerOpts(f));
+  }
+  // ---- Freunde-Raum
+  friendMenu() {
+    sfx.click();
+    const alpha = 'ABCDEGHJKLMNPQRSTUVWXYZ23456789';
+    const gen = (fair) => (fair ? 'F' : alpha[Math.floor(Math.random() * alpha.length)]) + Array.from({ length: 3 }, () => alpha[Math.floor(Math.random() * alpha.length)]).join('');
+    let fair = false;
+    const fairBtn = h('button', { class: 'tg', onclick: () => { fair = !fair; fairBtn.classList.toggle('on', fair); sfx.click(); } }, h('span', {}, 'Fairer Kampf (beide mit Starter-Deck)'), h('i'));
+    const inp = h('input', { class: 'inp code-in', maxlength: 8, placeholder: 'CODE', autocapitalize: 'characters', autocomplete: 'off' });
+    const m = this.modal(h('div', {}, h('h3', {}, 'Freunde-Raum'), h('p', { class: 'mut' }, 'Einer erstellt einen Raum und schickt den Code (oder Link), der andere gibt ihn ein. Es gibt keine Trophäen – nur Spaß.'),
+      h('div', { class: 'card2 pn' }, fairBtn, h('button', { class: 'btn block', onclick: () => { const code = gen(fair); m.close(); this.shareRoom(code); } }, ico('plus'), 'Raum erstellen')),
+      h('h4', {}, 'Oder beitreten'), h('div', { class: 'row' }, inp, h('button', { class: 'btn ghost', onclick: () => { const code = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length < 3) return this.toast('Bitte einen Code eingeben'); m.close(); this.startFriend(code); } }, 'Beitreten'))));
+  }
+  shareRoom(code) {
+    const link = `${location.origin}/#room=${code}`;
+    const m = this.modal(h('div', { class: 'c' }, h('h3', {}, 'Dein Raum'), h('div', { class: 'bigcode' }, code), h('p', { class: 'mut' }, code[0] === 'F' ? 'Fairer Kampf: beide spielen mit dem Starter-Deck.' : 'Jeder spielt mit seinem eigenen Deck.'),
+      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: async () => { try { await navigator.clipboard.writeText(link); this.toast('Link kopiert!'); } catch { this.toast(link); } } }, 'Link kopieren'), h('button', { class: 'btn', onclick: () => { m.close(); this.startFriend(code); } }, 'Los – warten'))));
+  }
+  startFriend(code) {
+    unlock(); const prof = this.profile();
+    if (code[0] === 'F') { prof.deck = STARTER.slice(); prof.levels = Object.fromEntries(STARTER.map((i) => [i, 1])); }
+    else if (!this.store.deckOk()) return this.toast('Dein Deck braucht mindestens 3 Zauber');
+    this.root.hidden = true; this.hero.stop(); this.battle.play(prof, { mode: 'friend', room: code });
   }
   trainMenu() {
     sfx.click();
@@ -196,7 +239,8 @@ export class App {
   // ---- Ergebnis nach dem Kampf
   renderResult(res, el) {
     const out = this.store.applyResult(res);
-    if (out.practice) { el.append(h('p', { class: 'mut' }, 'Übungskampf – keine Belohnung.')); return; }
+    if (out.practice) { el.append(h('p', { class: 'mut' }, res.mode === 'friend' ? 'Freundschaftskampf – keine Trophäen, nur Ehre!' : 'Übungskampf – keine Belohnung.')); return; }
+    if (out.firstClear) el.append(h('div', { class: 'lvlup' }, ico('tower'), ` Etage ${res.floor} bezwungen!`));
     const chips = [];
     if (out.trophies) chips.push(h('span', { class: out.trophies > 0 ? 'up' : 'down' }, rich(`{trophy} ${out.trophies > 0 ? '+' : ''}${out.trophies}`)));
     if (out.coins) chips.push(h('span', { class: 'gold' }, rich(`{coin} +${out.coins}`)));

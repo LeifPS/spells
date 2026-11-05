@@ -65,3 +65,22 @@ st = new Store(mem(), rng); assert.ok(st.claimDaily()); assert.equal(st.claimDai
 // Skins
 st = new Store(mem(), rng); st.d.coins = 1000; assert.ok(st.buySkin('rubin')); assert.ok(st.wear('rubin')); assert.ok(!st.wear('gold')); assert.ok(!st.buySkin('schatten'));
 console.log('Store: alle Tests bestanden');
+
+// Zauberturm: erste Bezwingung zahlt, Wiederholung kaum; Boss-Etage gibt ein Paket
+{
+  const s = new Store(mem(), rng);
+  let r = s.applyResult({ won: true, mode: 'tower', floor: 1, stats: { dmg: 100, casts: 5 }, casts: [] });
+  assert.equal(r.coins, 30); assert.equal(s.d.tower.best, 1); assert.ok(r.firstClear); assert.equal(r.trophies, 0);
+  r = s.applyResult({ won: true, mode: 'tower', floor: 1, stats: { dmg: 100, casts: 5 }, casts: [] });
+  assert.equal(r.coins, 8); assert.ok(!r.firstClear);
+  r = s.applyResult({ lost: true, mode: 'tower', floor: 2, stats: { dmg: 10, casts: 2 }, casts: [] });
+  assert.equal(s.d.tower.best, 1); assert.equal(r.coins, 0);
+  const fp = s.d.freePacks; s.applyResult({ won: true, mode: 'tower', floor: 5, stats: { dmg: 1, casts: 1 }, casts: [] });
+  assert.equal(s.d.freePacks, fp + 1, 'Boss-Etage gibt ein Gratis-Paket');
+  const f = s.applyResult({ won: true, mode: 'friend', stats: { dmg: 50, casts: 3 }, casts: [] }); assert.ok(f.practice && f.coins === 0);
+  // Fortschritts-Code
+  const code = s.exportCode(); const s2 = new Store(mem(), rng);
+  assert.ok(s2.importCode(code)); assert.equal(s2.d.tower.best, 5); assert.equal(s2.d.coins, s.d.coins);
+  assert.ok(!s2.importCode('murks')); assert.ok(!s2.importCode('SP2-@@@'));
+}
+console.log('Store (Turm, Code): ok');

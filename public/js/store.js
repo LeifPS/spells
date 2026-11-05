@@ -1,4 +1,5 @@
 // Spielstand (localStorage) + komplette Meta-Logik: Pakete, Stufen, Ränge, Aufgaben, Skins.
+import { FLOORS } from './tower.js';
 import { SPELLS, SPELL_BY_ID, RARITIES, RARITY_ORDER, LEVEL_COPIES, MAX_LEVEL, levelFor } from './spells.js';
 
 export const SAVE_KEY = 'spells_v2';
@@ -82,7 +83,7 @@ function fresh() {
     pity: { legendary: 0, mythic: 0 },
     stats: { wins: 0, losses: 0, draws: 0, packs: 0, casts: 0, dmg: 0, streak: 0, bestStreak: 0 },
     quests: { day: '', list: [] }, daily: { last: '', streak: 0 },
-    settings: { sound: true, music: true, volume: 0.7, vibe: true, fxLow: false }, tutorial: false, seen: {},
+    settings: { sound: true, music: true, volume: 0.7, vibe: true, fxLow: false }, tutorial: false, seen: {}, tower: { best: 0 },
   };
 }
 
@@ -246,7 +247,7 @@ export class Store {
   /** res: {won, draw, lost, mode, stats:{dmg,heal,casts,acc}, opponent:{trophies}, casts:[{id,acc}]}  */
   applyResult(res) {
     this.ensureQuests();
-    if (res.mode === 'practice') return { coins: 0, xp: 0, trophies: 0, ups: [], rankUp: false, rankDown: false, questsDone: [], practice: true, rank: this.rank };
+    if (res.mode === 'practice' || res.mode === 'friend') return { coins: 0, xp: 0, trophies: 0, ups: [], rankUp: false, rankDown: false, questsDone: [], practice: true, rank: this.rank };
     const d = this.d, online = res.mode === 'online' || res.mode === 'offline';
     const out = { coins: 0, xp: 0, trophies: 0, ups: [], rankUp: false, rankDown: false, questsDone: [], tutorial: res.mode === 'tutorial' };
     const rankBefore = this.rank.idx;
@@ -257,6 +258,12 @@ export class Store {
       if (res.won) { out.trophies = Math.round(Math.max(12, Math.min(38, 24 + diff / 25))); out.coins = 30; out.xp = 45; d.stats.wins++; d.stats.streak++; d.stats.bestStreak = Math.max(d.stats.bestStreak, d.stats.streak); if (d.stats.streak >= 3) out.coins += 10; }
       else if (res.draw) { out.coins = 12; out.xp = 22; d.stats.draws++; }
       else { out.trophies = -Math.round(Math.max(8, Math.min(24, 16 - diff / 40))); if (d.trophies + out.trophies < 0) out.trophies = -d.trophies; out.coins = 10; out.xp = 20; d.stats.losses++; d.stats.streak = 0; }
+    } else if (res.mode === 'tower') { // Zauberturm: Belohnung für die erste Bezwingung einer Etage
+      const f = FLOORS[(res.floor || 1) - 1], first = res.won && f && res.floor > (d.tower.best || 0);
+      if (res.won && f) {
+        out.coins = first ? f.reward.coins : 8; out.xp = first ? f.reward.xp : 8;
+        if (first) { d.tower.best = res.floor; out.firstClear = true; if (f.reward.pack) { d.freePacks++; out.pack = true; } }
+      } else out.xp = 6;
     } else { // Training: nur etwas Erfahrung
       out.xp = res.won ? 12 : 6;
     }

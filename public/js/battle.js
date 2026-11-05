@@ -9,6 +9,7 @@ import { sfx, music } from './audio.js';
 import { CFG } from './sim.js';
 import { LocalSource, NetSource } from './net.js';
 import { icoHTML } from './icons.js';
+import { FLOORS, MODS, towerOpts } from './tower.js';
 
 const EMOTES = ['👍', '😂', '😮', '😡', '👏', '🔥'];
 const STATUS_ICONS = { burn: 'flame', poison: 'skull', chill: 'snow', stun: 'star', reflect: 'mirror', phase: 'ghost', haste: 'bolt', curse: 'curse', regen: 'leaf', phoenix: 'sparkle' };
@@ -34,7 +35,7 @@ export class Battle {
   <div class="b-hurt"></div>
   <div class="b-tools"><button class="b-btn b-emo" aria-label="Emotes">${icoHTML('smile')}</button><button class="b-btn b-quit" aria-label="Aufgeben">${icoHTML('flag')}</button></div>
   <div class="b-emotes" hidden></div>
-  <div class="b-over b-queue" hidden><div class="b-card pn"><div class="b-spin"></div><h2>Suche Gegner …</h2><p class="b-qs">Verbinde …</p><p class="b-qt"></p><p class="b-tip"></p><button class="b-big ghost btn b-qcancel">Abbrechen</button></div></div>
+  <div class="b-over b-queue" hidden><div class="b-card pn"><div class="b-spin"></div><h2>Suche Gegner …</h2><p class="b-code" hidden></p><p class="b-qs">Verbinde …</p><p class="b-qt"></p><p class="b-tip"></p><button class="b-big ghost btn b-qcancel">Abbrechen</button></div></div>
   <div class="b-over b-count" hidden><div class="b-vs"><div class="b-vp"><canvas width="96" height="96"></canvas><b></b><small></small></div><div class="b-vsx">VS</div><div class="b-vp"><canvas width="96" height="96"></canvas><b></b><small></small></div></div><div class="b-cdn">3</div></div>
   <div class="b-over b-result" hidden><div class="b-card res"><h1></h1><p class="b-why"></p><div class="b-stats"></div><div class="b-extra"></div><div class="b-rbtns"></div></div></div>
 </div>
@@ -74,20 +75,23 @@ export class Battle {
   hide() { this.wake(false); this.root.hidden = true; if (this.raf) cancelAnimationFrame(this.raf); this.raf = null; }
 
   /** mode: 'online' | 'train' ; profile: {pid,name,trophies,deck,levels,skin} */
-  play(profile, { mode = 'online', level = 1, theme = null, noBot = false, ghost = null } = {}) {
-    this.profile = profile; this.mode = mode; this.level = level; this.opts = { mode, level, theme, noBot, ghost };
+  play(profile, opts = {}) {
+    const { mode = 'online', level = 1, theme = null, noBot = false, ghost = null } = opts;
+    this.profile = profile; this.mode = mode; this.level = level; this.opts = { ...opts, mode, level, theme, noBot, ghost }; this.mods = null;
     if (this.src) this.src.close();
     this.show();
     this.resetUi();
     this.applySettings(this.hooks.settings ? this.hooks.settings() : null); this.wake(true);
     music.start('menu');
-    if (mode === 'online') {
+    const qh = this.el.queue.querySelector('h2'), qc = this.el.queue.querySelector('.b-code');
+    qh.textContent = mode === 'friend' ? 'Freunde-Raum' : 'Suche Gegner …'; qc.hidden = mode !== 'friend'; qc.textContent = opts.room || '';
+    if (mode === 'online' || mode === 'friend') {
       this.phase = 'queue'; this.queueT = 0;
       this.el.queue.hidden = false; this.el.queue.querySelector('.b-qs').textContent = 'Verbinde …';
-      this.src = new NetSource(profile);
+      this.src = new NetSource(profile, { room: mode === 'friend' ? opts.room : null });
     } else {
       this.phase = 'wait';
-      this.src = new LocalSource(profile, { level, theme, noBot, countdown: mode === 'tutorial' || mode === 'practice' ? 2 : 3.2 });
+      this.src = new LocalSource(profile, { ...opts, level, theme, noBot, countdown: mode === 'tutorial' || mode === 'practice' ? 2 : 3.2 });
     }
     this.src.on((m) => this.msg(m));
     this.src.start();
@@ -132,8 +136,10 @@ export class Battle {
   msg(m) {
     switch (m.t) {
       case 'status': this.el.queue.querySelector('.b-qs').textContent = m.text; break;
+      case 'roomfull': if (this.hooks.toast) this.hooks.toast('Dieser Code wird gerade von dir selbst genutzt'); this.cancelQueue(); break;
       case 'offline': {
         if (this.phase !== 'queue') break;
+        if (this.mode === 'friend') { if (this.hooks.toast) this.hooks.toast('Keine Verbindung zum Server – Freunde-Räume brauchen Internet'); this.cancelQueue(); break; }
         if (this.hooks.toast) this.hooks.toast(`${m.why} – Übungskampf gegen Bot`);
         const t = this.profile.trophies;
         this.src.close();
@@ -154,7 +160,7 @@ export class Battle {
   }
 
   onStart(m) {
-    this.phase = 'count'; this.you = m.you; this.players = m.players; this.levels = m.levels; this.cdLeft = m.countdown; this.lastCdN = 99; this.local = !!m.local;
+    this.phase = 'count'; this.you = m.you; this.players = m.players; this.levels = m.levels; this.cdLeft = m.countdown; this.lastCdN = 99; this.local = !!m.local; this.mods = m.mods || null; this.floorInfo = m.floor || null;
     this.el.queue.hidden = true;
     this.scene.reset(m.you, m.players); this.scene.setTheme(m.theme); this.fx.clear();
     this.st = [this.blank(), this.blank()];
@@ -165,6 +171,7 @@ export class Battle {
     [me, foe].forEach((p, k) => { drawAvatar(vp[k].querySelector('canvas'), p.skin, 96); vp[k].querySelector('b').textContent = p.name + (p.bot ? ' 🤖' : ''); vp[k].querySelector('small').textContent = `🏆 ${p.trophies}`; });
     this.buildDeck(me.deck, m.levels[m.you]);
     this.el.count.hidden = false;
+    if (m.floor && !this.hooks.noRuleBanner) { const md = MODS[m.floor.mod] || MODS.none; this.coach(`<b>Etage ${m.floor.n} · ${m.floor.name}</b><br>Regel: <b>${md.name}</b> – ${md.desc}`); clearTimeout(this._rb); this._rb = setTimeout(() => { if (this.mode === 'tower') this.coach(null); }, 6500); }
     this.pad.enabled = false; this.pad.setGhost(null); this.ghostId = null;
     this.opt = {};
     if (this.opts.ghost) this.toggleGhost(this.opts.ghost);
@@ -199,6 +206,7 @@ export class Battle {
     this.renderStatuses();
   }
 
+  cdMul() { return (this.mods && this.mods.cd) || 1; }
   setHp(i, hp) { this.st[i].hp = hp; }
 
   onEvent(e) {
@@ -284,9 +292,9 @@ export class Battle {
     const now = performance.now();
     this.opt = this.opt || {};
     this.opt.gcdUntil = now + 600; this.opt.gcd0 = CFG.gcd; this.opt.t0 = now;
-    (this.opt.cds = this.opt.cds || {})[r.id] = { until: now + 600, cd0: sp.cd, t0: now };
+    (this.opt.cds = this.opt.cds || {})[r.id] = { until: now + 600, cd0: sp.cd * this.cdMul(), t0: now };
     this.opt.mana = { until: now + 600, v: s.mana - sp.cost };
-    s.gcd = CFG.gcd; s.cds[r.id] = sp.cd; s.mana -= sp.cost;
+    s.gcd = CFG.gcd; s.cds[r.id] = sp.cd * this.cdMul(); s.mana -= sp.cost;
     this.src.cast(r.id, Math.round(r.score * 1000) / 1000);
     sfx.recognized(RARITY_ORDER.indexOf(sp.rarity)); this.buzz(RARITY_ORDER.indexOf(sp.rarity) >= 3 ? [18, 30, 18] : 10);
     return { ok: true, color: sp.color, msg: sp.name };
@@ -359,7 +367,7 @@ export class Battle {
       this.matchT += dt;
       for (const i of [0, 1]) {
         const s = this.st[i];
-        const reg = CFG.regen * (s.chill > 0 ? CFG.chillRegen : 1) * (s.haste > 0 ? CFG.hasteRegen : 1);
+        const reg = CFG.regen * ((this.mods && this.mods.regen) || 1) * (s.chill > 0 ? CFG.chillRegen : 1) * (s.haste > 0 ? CFG.hasteRegen : 1);
         s.mana = Math.min(CFG.maxMana, s.mana + reg * dt);
         s.gcd = Math.max(0, s.gcd - dt);
         for (const id in s.cds) s.cds[id] = Math.max(0, s.cds[id] - dt);
@@ -402,7 +410,7 @@ export class Battle {
     for (const id of this.deckIds) {
       const o = this.slots[id], sp = SPELL_BY_ID[id];
       const cd = me.cds[id] || 0, g = me.gcd, rem = Math.max(cd, g);
-      const frac = clamp(Math.max(cd / sp.cd, g / CFG.gcd));
+      const frac = clamp(Math.max(cd / (sp.cd * this.cdMul()), g / CFG.gcd));
       const ready = playing && rem <= CFG.tol && me.mana >= sp.cost && me.stun <= 0;
       const key = `${frac.toFixed(2)}|${ready}|${me.mana >= sp.cost}|${cd > g ? Math.ceil(cd) : 0}`;
       if (o.last === key) continue; o.last = key;
@@ -421,7 +429,7 @@ export class Battle {
     if (!draw) { this.scene.trigger(1 - m.winner, 'die'); this.scene.trigger(m.winner, 'win'); }
     this.scene.slowmo(0.35, 0.8); this.scene.shake(14);
     const stats = m.stats || [];
-    const res = { won: win && !draw, draw, lost: !win && !draw, reason: m.reason, time: m.time, you: this.you, mode: this.mode, stats: stats[this.you] || null, foeStats: stats[1 - this.you] || null, opponent: this.players ? this.players[1 - this.you] : null, level: this.level, casts: this.castLog };
+    const res = { won: win && !draw, draw, lost: !win && !draw, reason: m.reason, time: m.time, you: this.you, mode: this.mode, stats: stats[this.you] || null, foeStats: stats[1 - this.you] || null, opponent: this.players ? this.players[1 - this.you] : null, level: this.level, casts: this.castLog, floor: this.opts.floor ? this.opts.floor.n : null };
     music.stop(); this.wake(false);
     setTimeout(() => this.showResult(res), 1500);
   }
@@ -438,7 +446,12 @@ export class Battle {
     if (this.hooks.onResult) { try { this.hooks.onResult(res, extra); } catch (e) { console.error(e); } }
     const bt = card.querySelector('.b-rbtns'); bt.innerHTML = '';
     const again = document.createElement('button'); again.className = 'btn big block shine'; again.textContent = 'Nochmal';
-    again.onclick = () => { sfx.click(); this.play(this.hooks.profile ? this.hooks.profile() : this.profile, this.opts); };
+    let nextOpts = this.opts;
+    if (this.opts.mode === 'tower') {
+      const n = this.opts.floor.n, nf = res.won ? FLOORS[n] : FLOORS[n - 1];
+      if (!nf) { again.hidden = true; } else { nextOpts = towerOpts(nf); again.textContent = res.won ? 'Nächste Etage' : 'Nochmal versuchen'; }
+    }
+    again.onclick = () => { sfx.click(); this.play(this.hooks.profile ? this.hooks.profile() : this.profile, nextOpts); };
     const menu = document.createElement('button'); menu.className = 'btn big block ghost'; menu.textContent = 'Menü';
     menu.onclick = () => { sfx.back(); this.hide(); music.start('menu'); if (this.hooks.onExit) this.hooks.onExit(res); };
     bt.append(again, menu);
