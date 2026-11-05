@@ -7,6 +7,7 @@ const store = new Store();
 if (params.has('train') || params.has('dev') || params.has('room')) store.d.seen.welcome = true;
 const battle = new Battle(document.getElementById('battle'), {});
 const app = new App(document.getElementById('app'), store, battle);
+try { navigator.storage?.persist?.(); } catch {}
 window.app = app; window.battle = battle; window.store = store;
 import('./spells.js').then((m) => { window.SPELLS = m.SPELLS; });
 
